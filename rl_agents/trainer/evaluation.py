@@ -98,7 +98,7 @@ class Evaluation(object):
         self.write_logging()
         self.write_metadata()
         self.filtered_agent_stats = 0
-        self.best_agent_stats = -np.infty, 0
+        self.best_agent_stats = -np.inf, 0
 
         self.recover = recover
         if self.recover:

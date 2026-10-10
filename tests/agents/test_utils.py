@@ -6,7 +6,7 @@ from rl_agents.utils import bernoulli_kullback_leibler, d_bernoulli_kullback_lei
 
 
 def test_bernoulli_kullback_leibler():
-    assert bernoulli_kullback_leibler(0, 1) == np.infty
+    assert bernoulli_kullback_leibler(0, 1) == np.inf
     q = np.random.random()
     assert bernoulli_kullback_leibler(0, q) > 0
     assert bernoulli_kullback_leibler(q, q) == 0

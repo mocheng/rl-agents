@@ -33,4 +33,40 @@ Use `--render video` to save MP4 files or `--render headless` to evaluate withou
 Use a smaller episode count for a quick smoke run. Results, checkpoints, and videos are written under
 `scripts/out/`.
 
+## HighwayEnv
+
+Install the driving environments (keep them pinned to the `gymnasium` version installed above; from
+`highway-env>=1.9` the dependency resolves to a `gymnasium>=1.0` that this project does not support):
+
+```bash
+python -m pip install "highway-env==1.8.2"
+```
+
+Train a DQN agent on the 3-lane highway task:
+
+```bash
+cd scripts
+python experiments.py evaluate \
+  configs/HighwayEnv/env_medium.json \
+  configs/HighwayEnv/agents/DQNAgent/dqn.json \
+  --train --episodes=600 --render headless
+```
+
+`configs/HighwayEnv/env_easy.json` (empty 2-lane road) trains in seconds and is the fastest smoke test.
+`configs/HighwayEnv/agents/DQNAgent/ddqn.json` (Double DQN) and `dueling_ddqn.json` (Dueling + Double)
+are drop-in replacements for `dqn.json`. The attention model `ego_attention.json` must be paired with
+`configs/HighwayEnv/env_obs_attention.json`, which defines the 7-feature per-vehicle observation it
+expects.
+
+Replay the latest checkpoint in a live window, or watch the training curves:
+
+```bash
+python experiments.py evaluate \
+  configs/HighwayEnv/env_medium.json \
+  configs/HighwayEnv/agents/DQNAgent/dqn.json \
+  --test --recover --episodes=5 --render human
+
+tensorboard --logdir out/HighwayEnv/DQNAgent
+```
+
 Gymnasium may warn that `CartPole-v0` is deprecated; this is the environment currently named by the repository configuration.

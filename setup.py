@@ -18,7 +18,7 @@ setup(
     keywords='reinforcement learning agents',
     packages=find_packages(exclude=['docs', 'scripts', 'tests*']),
     install_requires=['gymnasium', 'numpy', 'pandas', 'numba', 'pygame', 'matplotlib', 'seaborn', 'six', 'docopt',
-                      'torch>=1.2.0', 'tensorboardX', 'scipy'],
+                      'torch>=1.2.0', 'tensorboardX', 'tensorboard', 'moviepy', 'scipy'],
     tests_require=['pytest'],
     extras_require={
         'dev': ['scipy'],

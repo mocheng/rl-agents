@@ -100,6 +100,7 @@ class Evaluation(object):
         if display_agent:
             try:
                 # Render the agent within the environment viewer, if supported
+                self.env.reset()
                 self.env.render()
                 self.env.unwrapped.viewer.directory = self.run_directory
                 self.env.unwrapped.viewer.set_agent_display(

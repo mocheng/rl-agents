@@ -41,6 +41,7 @@ class Evaluation(object):
                  sim_seed=None,
                  recover=None,
                  display_env=True,
+                 render_mode=None,
                  display_agent=True,
                  display_rewards=True,
                  close_env=True,
@@ -57,7 +58,8 @@ class Evaluation(object):
         :param recover: Recover the agent parameters from a file.
                         - If True, it the default latest save will be used.
                         - If a string, it will be used as a path.
-        :param display_env: Render the environment, and have a monitor recording its videos
+        :param display_env: Backward-compatible switch between video and headless modes
+        :param render_mode: Render output: headless, human, or video
         :param display_agent: Add the agent graphics to the environment viewer, if supported
         :param display_rewards: Display the performances of the agent through the episodes
         :param close_env: Should the environment be closed when the evaluation is closed
@@ -71,19 +73,24 @@ class Evaluation(object):
         self.training = training
         self.sim_seed = sim_seed if sim_seed is not None else np.random.randint(0, 1e6)
         self.close_env = close_env
-        self.display_env = display_env
+        self.render_mode = render_mode or ("video" if display_env else "headless")
+        if self.render_mode not in {"headless", "human", "video"}:
+            raise ValueError("Unknown render mode '{}'.".format(self.render_mode))
+        self.display_env = self.render_mode != "headless"
         self.step_callback_fn = step_callback_fn
 
         self.directory = Path(directory or self.default_directory)
         self.run_directory = self.directory / (run_directory or self.default_run_directory)
-        self.wrapped_env = RecordVideo(env,
-                                       self.run_directory,
-                                       episode_trigger=(None if self.display_env else lambda e: False))
-        try:
-            self.wrapped_env.unwrapped.set_record_video_wrapper(self.wrapped_env)
-        except AttributeError:
-            pass
-        self.wrapped_env = RecordEpisodeStatistics(self.wrapped_env)
+        self.video_recorder = None
+        wrapped_env = env
+        if self.render_mode == "video":
+            self.video_recorder = RecordVideo(env, self.run_directory)
+            wrapped_env = self.video_recorder
+            try:
+                env.unwrapped.set_record_video_wrapper(self.video_recorder)
+            except AttributeError:
+                pass
+        self.wrapped_env = RecordEpisodeStatistics(wrapped_env)
         self.episode = 0
         self.writer = SummaryWriter(str(self.run_directory))
         self.agent.set_writer(self.writer)
@@ -97,7 +104,7 @@ class Evaluation(object):
         if self.recover:
             self.load_agent_model(self.recover)
 
-        if display_agent:
+        if display_agent and self.display_env:
             try:
                 # Render the agent within the environment viewer, if supported
                 self.env.reset()
@@ -128,8 +135,8 @@ class Evaluation(object):
         If applicable, the agent model should be loaded before using the recover option.
         """
         self.training = False
-        if self.display_env:
-            self.wrapped_env.episode_trigger = lambda e: True
+        if self.video_recorder is not None:
+            self.video_recorder.episode_trigger = lambda e: True
         try:
             self.agent.eval()
         except AttributeError:
@@ -262,7 +269,7 @@ class Evaluation(object):
         :param batch: index of the current batch
         :return: a list of trajectories, i.e. lists of Transitions
         """
-        env = load_environment(environment_config)
+        env = load_environment(environment_config, render_mode="headless")
 
         if batch == 0:  # Force pure exploration during first batch
             agent_config["exploration"]["final_temperature"] = 1

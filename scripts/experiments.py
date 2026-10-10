@@ -8,6 +8,7 @@ Options:
   -h --help              Show this screen.
   --episodes <count>     Number of episodes [default: 5].
   --no-display           Disable environment, agent, and rewards rendering.
+  --render <mode>        Render mode: headless, human, or video [default: video].
   --name-from-config     Name the output folder from the corresponding config files
   --processes <count>    Number of running processes [default: 4].
   --recover              Load model from the latest checkpoint.
@@ -34,15 +35,31 @@ from rl_agents.agents.common.factory import load_agent, load_environment
 BENCHMARK_FILE = 'benchmark_summary'
 LOGGING_CONFIG = 'configs/logging.json'
 VERBOSE_CONFIG = 'configs/verbose.json'
+RENDER_MODES = {"headless", "human", "video"}
 
 
 def main():
     opts = docopt(__doc__)
+    opts["render_mode"] = resolve_render_mode(opts)
+    if opts["benchmark"] and opts["render_mode"] == "human":
+        raise ValueError("Human rendering is only supported for single evaluations.")
     if opts['evaluate']:
         for _ in range(int(opts['--repeat'])):
             evaluate(opts['<environment>'], opts['<agent>'], opts)
     elif opts['benchmark']:
         benchmark(opts)
+
+
+def resolve_render_mode(options):
+    render_mode = options["--render"]
+    if render_mode not in RENDER_MODES:
+        raise ValueError("Unknown render mode '{}'. Choose from: {}."
+                         .format(render_mode, ", ".join(sorted(RENDER_MODES))))
+    if options["--no-display"]:
+        if render_mode == "human":
+            raise ValueError("--no-display cannot be combined with --render human.")
+        return "headless"
+    return render_mode
 
 
 def evaluate(environment_config, agent_config, options):
@@ -56,7 +73,8 @@ def evaluate(environment_config, agent_config, options):
     logger.configure(LOGGING_CONFIG)
     if options['--verbose']:
         logger.configure(VERBOSE_CONFIG)
-    env = load_environment(environment_config)
+    render_mode = options["render_mode"]
+    env = load_environment(environment_config, render_mode=render_mode)
     agent = load_agent(agent_config, env)
     run_directory = None
     if options['--name-from-config']:
@@ -70,9 +88,9 @@ def evaluate(environment_config, agent_config, options):
                             num_episodes=int(options['--episodes']),
                             sim_seed=options['--seed'],
                             recover=options['--recover'] or options['--recover-from'],
-                            display_env=not options['--no-display'],
-                            display_agent=not options['--no-display'],
-                            display_rewards=not options['--no-display'])
+                            render_mode=render_mode,
+                            display_agent=render_mode != "headless",
+                            display_rewards=render_mode == "human")
     if options['--train']:
         evaluation.train()
     elif options['--test']:

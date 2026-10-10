@@ -8,6 +8,12 @@ from rl_agents.configuration import Configurable
 
 logger = logging.getLogger(__name__)
 
+GYM_RENDER_MODES = {
+    "headless": None,
+    "human": "human",
+    "video": "rgb_array",
+}
+
 
 def agent_factory(environment, config):
     """
@@ -56,11 +62,12 @@ def load_agent_config(config_path):
     return agent_config
 
 
-def load_environment(env_config):
+def load_environment(env_config, render_mode="video"):
     """
         Load an environment from a configuration file.
 
     :param env_config: the configuration, or path to the environment configuration file
+    :param render_mode: output mode: headless, human, or video
     :return: the environment
     """
     # Load the environment config from file
@@ -71,8 +78,10 @@ def load_environment(env_config):
     # Make the environment
     if env_config.get("import_module", None):
         __import__(env_config["import_module"])
+    if render_mode not in GYM_RENDER_MODES:
+        raise ValueError("Unknown render mode '{}'.".format(render_mode))
     try:
-        env = gym.make(env_config['id'], render_mode='rgb_array')
+        env = gym.make(env_config['id'], render_mode=GYM_RENDER_MODES[render_mode])
         # Save env module in order to be able to import it again
         env.import_module = env_config.get("import_module", None)
     except KeyError:

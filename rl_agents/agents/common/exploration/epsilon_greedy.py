@@ -20,6 +20,7 @@ class EpsilonGreedy(DiscreteDistribution):
         self.optimal_action = None
         self.epsilon = 0
         self.time = 0
+        self.global_step = 0
         self.writer = None
         self.seed()
 
@@ -45,7 +46,7 @@ class EpsilonGreedy(DiscreteDistribution):
             (self.config['temperature'] - self.config['final_temperature']) * \
             np.exp(- self.time / self.config['tau'])
         if self.writer:
-            self.writer.add_scalar('exploration/epsilon', self.epsilon, self.time)
+            self.writer.add_scalar('exploration/epsilon', self.epsilon, self.global_step)
 
     def step_time(self):
         self.time += 1
@@ -55,3 +56,6 @@ class EpsilonGreedy(DiscreteDistribution):
 
     def set_writer(self, writer):
         self.writer = writer
+
+    def set_global_step(self, step):
+        self.global_step = step

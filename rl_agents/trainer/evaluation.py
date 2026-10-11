@@ -92,6 +92,7 @@ class Evaluation(object):
                 pass
         self.wrapped_env = RecordEpisodeStatistics(wrapped_env)
         self.episode = 0
+        self.global_step = 0  # Number of environment steps run, the x-axis of all TensorBoard summaries
         self.writer = SummaryWriter(str(self.run_directory))
         self.agent.set_writer(self.writer)
         self.agent.evaluation = self
@@ -188,6 +189,8 @@ class Evaluation(object):
         transition = self.wrapped_env.step(action)
         self.observation, reward, done, truncated, info = transition
         terminal = done or truncated
+        self.global_step += 1
+        self.agent.set_global_step(self.global_step)
 
         # Call callback
         if self.step_callback_fn is not None:
@@ -333,11 +336,14 @@ class Evaluation(object):
     def after_all_episodes(self, episode, rewards, duration):
         rewards = np.array(rewards)
         gamma = self.agent.config.get("gamma", 1)
-        self.writer.add_scalar('episode/length', len(rewards), episode)
-        self.writer.add_scalar('episode/total_reward', sum(rewards), episode)
-        self.writer.add_scalar('episode/return', sum(r*gamma**t for t, r in enumerate(rewards)), episode)
-        self.writer.add_scalar('episode/fps', len(rewards) / max(duration, 1e-6), episode)
-        self.writer.add_histogram('episode/rewards', rewards, episode)
+        # All episode summaries are indexed by the run-global step, so that they share an x-axis
+        # with the agent summaries (exploration, loss, values) logged during the episode.
+        self.writer.add_scalar('episode/index', episode, self.global_step)
+        self.writer.add_scalar('episode/length', len(rewards), self.global_step)
+        self.writer.add_scalar('episode/total_reward', sum(rewards), self.global_step)
+        self.writer.add_scalar('episode/return', sum(r*gamma**t for t, r in enumerate(rewards)), self.global_step)
+        self.writer.add_scalar('episode/fps', len(rewards) / max(duration, 1e-6), self.global_step)
+        self.writer.add_histogram('episode/rewards', rewards, self.global_step)
         logger.info("Episode {} score: {:.1f}".format(episode, sum(rewards)))
 
     def after_some_episodes(self, episode, rewards,

@@ -69,4 +69,8 @@ python experiments.py evaluate \
 tensorboard --logdir out/HighwayEnv/DQNAgent
 ```
 
+All summaries of a run share a single x-axis: the number of environment steps executed so far, so
+`episode/total_reward`, `exploration/epsilon`, `agent/loss` and `agent/value_mean` can be compared
+directly (`episode/index` gives the episode number on that axis).
+
 Gymnasium may warn that `CartPole-v0` is deprecated; this is the environment currently named by the repository configuration.

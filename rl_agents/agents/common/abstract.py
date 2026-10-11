@@ -9,6 +9,8 @@ class AbstractAgent(Configurable, ABC):
         super(AbstractAgent, self).__init__(config)
         self.writer = None  # Tensorboard writer
         self.directory = None  # Run directory
+        self.global_step = 0  # Number of environment steps run so far. Updated by the trainer:
+        # it is the x-axis shared by all the summaries logged during a run.
 
     """
         An abstract class specifying the interface of a generic agent.
@@ -89,6 +91,14 @@ class AbstractAgent(Configurable, ABC):
         :param SummaryWriter writer: a summary writer
         """
         self.writer = writer
+
+    def set_global_step(self, step):
+        """
+            Set the run-global step (number of environment steps run so far), used as the
+            x-axis of the summaries logged by the agent.
+        :param int step: the current run-global step
+        """
+        self.global_step = step
 
     def set_directory(self, directory):
         self.directory = directory

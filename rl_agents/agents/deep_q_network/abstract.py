@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 import numpy as np
+import torch
 from gymnasium import spaces
 
 from rl_agents.agents.common.abstract import AbstractStochasticAgent
@@ -61,6 +62,11 @@ class AbstractDQNAgent(AbstractStochasticAgent, ABC):
             loss, _, _ = self.compute_bellman_residual(batch)
             self.step_optimizer(loss)
             self.update_target_network()
+            if self.writer:
+                self.writer.add_scalar("agent/loss", loss.item(), self.global_step)
+                with torch.no_grad():
+                    values, _ = self.get_batch_state_values(batch.state)
+                self.writer.add_scalar("agent/value_mean", float(np.mean(values)), self.global_step)
 
     def act(self, state, step_exploration_time=True):
         """
@@ -152,6 +158,13 @@ class AbstractDQNAgent(AbstractStochasticAgent, ABC):
         super().set_writer(writer)
         try:
             self.exploration_policy.set_writer(writer)
+        except AttributeError:
+            pass
+
+    def set_global_step(self, step):
+        super().set_global_step(step)
+        try:
+            self.exploration_policy.set_global_step(step)
         except AttributeError:
             pass
 

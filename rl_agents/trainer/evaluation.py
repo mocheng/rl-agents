@@ -409,7 +409,7 @@ class Evaluation(object):
 
     def reset(self, seed=0):
         seed = self.sim_seed + seed if self.sim_seed is not None else None
-        self.observation, info = self.wrapped_env.reset()
+        self.observation, info = self.wrapped_env.reset(seed=seed)
         self.agent.seed(seed)  # Seed the agent with the main environment seed
         self.agent.reset()
         self.last_step_time = None  # Do not carry pacing delays across episodes

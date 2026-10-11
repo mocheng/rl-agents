@@ -393,6 +393,10 @@ def activation_factory(activation_type):
         return F.relu
     elif activation_type == "TANH":
         return torch.tanh
+    elif activation_type == "LEAKY_RELU":
+        return F.leaky_relu
+    elif activation_type == "ELU":
+        return F.elu
     else:
         raise ValueError("Unknown activation_type: {}".format(activation_type))
 

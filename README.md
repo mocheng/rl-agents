@@ -105,6 +105,7 @@ And the agents by their class, and configuration dictionary.
 ```
 
 If keys are missing from these configurations, values in `agent.default_config()` will be used instead.
+The `model.activation` can be `RELU` (default), `TANH`, `LEAKY_RELU` or `ELU`.
 
 Finally, a batch of experiments can be scheduled in a _benchmark_.
 All experiments are then executed in parallel on several processes.

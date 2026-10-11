@@ -1,0 +1,6 @@
+{
+    "base_config": "configs/HighwayEnv/agents/DQNAgent/dqn.json",
+    "model": {
+        "activation": "ELU"
+    }
+}

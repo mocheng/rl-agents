@@ -20,6 +20,29 @@ def test_evaluation(tmpdir):
     assert any(['metadata' in file.name for file in evaluation.run_directory.iterdir()])
 
 
+def test_episodes_are_seeded(tmpdir):
+    env = gym.make('CartPole-v0')
+    agent = RandomUniformAgent(env)
+    evaluation = Evaluation(env,
+                            agent,
+                            directory=tmpdir,
+                            num_episodes=2,
+                            sim_seed=42,
+                            display_env=False,
+                            display_agent=False,
+                            display_rewards=False)
+    seeds = []
+    original_reset = evaluation.wrapped_env.reset
+
+    def recording_reset(*args, **kwargs):
+        seeds.append(kwargs.get("seed"))
+        return original_reset(*args, **kwargs)
+
+    evaluation.wrapped_env.reset = recording_reset
+    evaluation.test()
+    assert seeds == [42, 43]
+
+
 def test_interrupted_training_saves_final_checkpoint(tmpdir):
     pytest.importorskip("torch")
     from rl_agents.agents.deep_q_network.pytorch import DQNAgent

@@ -1,8 +1,7 @@
 # rl-agents
 
-A collection of Reinforcement Learning agents
-
-[![build](https://github.com/eleurent/rl-agents/actions/workflows/build.yml/badge.svg)](https://github.com/eleurent/rl-agents/actions/workflows/build.yml)
+A collection of Reinforcement Learning agents.
+This repo is a fork of [eleurent](https://github.com/eleurent/rl-agents) which is not maintained any more. The purpose is to keep refining for education.
 
 * [Installation](#installation)
 * [Usage](#usage)

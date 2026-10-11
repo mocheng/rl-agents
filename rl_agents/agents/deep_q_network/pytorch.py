@@ -103,3 +103,43 @@ class DQNAgent(AbstractDQNAgent):
         # add_graph() takes no global_step: its graph/profiler events are always stamped with step 0
         self.writer.add_graph(self.value_net, input_to_model=(model_input,))
         self.writer.add_scalar("agent/trainable_parameters", trainable_parameters(self.value_net), self.steps)
+
+    def log_statistics(self):
+        """
+            Log histograms and norms of the value network parameters and gradients to Tensorboard.
+
+            Non-finite values are counted and excluded from the histograms, so that a diverging model is
+            reported rather than breaking the summaries.
+        """
+        if self.writer is None:
+            return
+        parameters_norm, gradients_norm = 0, 0
+        with torch.no_grad():
+            for name, parameter in self.value_net.named_parameters():
+                parameters_norm += float(parameter.norm()) ** 2
+                self.writer.add_scalar("agent/weight_norm/{}".format(name), float(parameter.norm()), self.global_step)
+                self.log_distribution("agent/weights/{}".format(name), parameter)
+                gradient = parameter.grad
+                if gradient is not None:
+                    gradients_norm += float(gradient.norm()) ** 2
+                    self.writer.add_scalar("agent/gradient_norm/{}".format(name), float(gradient.norm()),
+                                           self.global_step)
+                    self.log_distribution("agent/gradients/{}".format(name), gradient)
+            self.writer.add_scalar("agent/parameters_norm", parameters_norm ** 0.5, self.global_step)
+            self.writer.add_scalar("agent/gradients_norm", gradients_norm ** 0.5, self.global_step)
+
+    def log_distribution(self, tag, tensor):
+        """
+            Log a histogram of a tensor, excluding non-finite values.
+
+        :param tag: the Tensorboard tag of the histogram
+        :param tensor: the tensor whose distribution should be logged
+        """
+        finite = torch.isfinite(tensor)
+        num_non_finite = int((~finite).sum()) if finite.dim() else int(not finite)
+        if num_non_finite:
+            self.writer.add_scalar("agent/non_finite/{}".format(tag.split("/", 1)[-1]), num_non_finite,
+                                   self.global_step)
+        values = tensor[finite] if finite.dim() else tensor
+        if values.numel():
+            self.writer.add_histogram(tag, values.cpu().numpy(), self.global_step)

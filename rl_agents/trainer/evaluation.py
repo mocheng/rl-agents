@@ -40,8 +40,10 @@ class Evaluation(object):
                  training=True,
                  sim_seed=None,
                  recover=None,
+                 model_name=None,
                  display_env=True,
                  render_mode=None,
+                 render_fps=None,
                  display_agent=True,
                  display_rewards=True,
                  close_env=True,
@@ -56,10 +58,13 @@ class Evaluation(object):
         !param training: Whether the agent is being trained or tested
         :param sim_seed: The seed used for the environment/agent randomness source
         :param recover: Recover the agent parameters from a file.
-                        - If True, it the default latest save will be used.
+                        - If True, the model named by ``model_name`` will be used.
                         - If a string, it will be used as a path.
+        :param model_name: Name, without extension, of the saved model file in the saved_models folder.
+                           Defaults to 'latest'.
         :param display_env: Backward-compatible switch between video and headless modes
         :param render_mode: Render output: headless, human, or video
+        :param render_fps: Pace the human rendering to this many frames per second. None disables pacing.
         :param display_agent: Add the agent graphics to the environment viewer, if supported
         :param display_rewards: Display the performances of the agent through the episodes
         :param close_env: Should the environment be closed when the evaluation is closed
@@ -77,6 +82,8 @@ class Evaluation(object):
         if self.render_mode not in {"headless", "human", "video"}:
             raise ValueError("Unknown render mode '{}'.".format(self.render_mode))
         self.display_env = self.render_mode != "headless"
+        self.render_fps = render_fps
+        self.last_step_time = None
         self.step_callback_fn = step_callback_fn
 
         self.directory = Path(directory or self.default_directory)
@@ -101,6 +108,11 @@ class Evaluation(object):
         self.filtered_agent_stats = 0
         self.best_agent_stats = -np.inf, 0
 
+        self.model_name = model_name or "latest"
+        if self.model_name.endswith(".tar"):
+            self.model_name = self.model_name[:-len(".tar")]
+        self.model_path = self.directory / self.SAVED_MODELS_FOLDER / "{}.tar".format(self.model_name)
+
         self.recover = recover
         if self.recover:
             self.load_agent_model(self.recover)
@@ -123,11 +135,14 @@ class Evaluation(object):
 
     def train(self):
         self.training = True
-        if getattr(self.agent, "batched", False):
-            self.run_batched_episodes()
-        else:
-            self.run_episodes()
-        self.close()
+        try:
+            if getattr(self.agent, "batched", False):
+                self.run_batched_episodes()
+            else:
+                self.run_episodes()
+        finally:
+            # Save the final checkpoint and release resources, even on interruption or error
+            self.close()
 
     def test(self):
         """
@@ -191,6 +206,15 @@ class Evaluation(object):
         terminal = done or truncated
         self.global_step += 1
         self.agent.set_global_step(self.global_step)
+
+        # Pace the human rendering
+        if self.render_mode == "human" and self.render_fps:
+            now = time.monotonic()
+            if self.last_step_time is not None:
+                delay = 1.0 / self.render_fps - (now - self.last_step_time)
+                if delay > 0:
+                    time.sleep(delay)
+            self.last_step_time = time.monotonic()
 
         # Call callback
         if self.step_callback_fn is not None:
@@ -309,7 +333,7 @@ class Evaluation(object):
         if do_save:
             episode_path = Path(self.run_directory) / "checkpoint-{}.tar".format(identifier)
             try:
-                self.agent.save(filename=permanent_folder / "latest.tar")
+                self.agent.save(filename=self.model_path)
                 episode_path = self.agent.save(filename=episode_path)
                 if episode_path:
                     logger.info("Saved {} model to {}".format(self.agent.__class__.__name__, episode_path))
@@ -319,7 +343,7 @@ class Evaluation(object):
 
     def load_agent_model(self, model_path):
         if model_path is True:
-            model_path = self.directory / self.SAVED_MODELS_FOLDER / "latest.tar"
+            model_path = self.model_path
         if isinstance(model_path, str):
             model_path = Path(model_path)
             if not model_path.exists():
@@ -388,6 +412,7 @@ class Evaluation(object):
         self.observation, info = self.wrapped_env.reset()
         self.agent.seed(seed)  # Seed the agent with the main environment seed
         self.agent.reset()
+        self.last_step_time = None  # Do not carry pacing delays across episodes
 
     def close(self):
         """

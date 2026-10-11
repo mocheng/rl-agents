@@ -9,10 +9,12 @@ Options:
   --episodes <count>     Number of episodes [default: 5].
   --no-display           Disable environment, agent, and rewards rendering.
   --render <mode>        Render mode: headless, human, or video [default: video].
+  --render-fps <fps>     Pace human rendering to this many frames per second. 0 = no pacing [default: 0].
   --name-from-config     Name the output folder from the corresponding config files
   --processes <count>    Number of running processes [default: 4].
   --recover              Load model from the latest checkpoint.
   --recover-from <file>  Load model from a given checkpoint.
+  --model-name <name>    Name of the saved model file, without extension [default: latest].
   --seed <str>           Seed the environments and agents.
   --train                Train the agent.
   --test                 Test the agent.
@@ -82,13 +84,16 @@ def evaluate(environment_config, agent_config, options):
                                   datetime.datetime.now().strftime('%Y%m%d-%H%M%S'),
                                   os.getpid())
     options['--seed'] = int(options['--seed']) if options['--seed'] is not None else None
+    render_fps = float(options['--render-fps']) or None
     evaluation = Evaluation(env,
                             agent,
                             run_directory=run_directory,
                             num_episodes=int(options['--episodes']),
                             sim_seed=options['--seed'],
                             recover=options['--recover'] or options['--recover-from'],
+                            model_name=options['--model-name'],
                             render_mode=render_mode,
+                            render_fps=render_fps,
                             display_agent=render_mode != "headless",
                             display_rewards=render_mode == "human")
     if options['--train']:

@@ -33,7 +33,8 @@ class AbstractDQNAgent(AbstractStochasticAgent, ABC):
                     device="cuda:best",
                     exploration=dict(method="EpsilonGreedy"),
                     target_update=1,
-                    double=True)
+                    double=True,
+                    statistics_frequency=1000)
 
     def record(self, state, action, reward, next_state, done, info):
         """
@@ -67,6 +68,16 @@ class AbstractDQNAgent(AbstractStochasticAgent, ABC):
                 with torch.no_grad():
                     values, _ = self.get_batch_state_values(batch.state)
                 self.writer.add_scalar("agent/value_mean", float(np.mean(values)), self.global_step)
+                if self.config["statistics_frequency"] and self.steps % self.config["statistics_frequency"] == 0:
+                    self.log_statistics()
+
+    def log_statistics(self):
+        """
+            Log training statistics about the agent model to the Tensorboard writer.
+
+            Called by :meth:`record` every ``statistics_frequency`` updates, when a writer is available.
+            The base implementation does nothing: concrete agents owning a model should override it.
+        """
 
     def act(self, state, step_exploration_time=True):
         """

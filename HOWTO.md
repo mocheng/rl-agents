@@ -30,6 +30,11 @@ python experiments.py evaluate \
 Use `--render video` to save MP4 files or `--render headless` to evaluate without output. The legacy
 `--no-display` option also selects headless mode.
 
+Use `--model-name <name>` to save the trained model as `saved_models/<name>.tar` instead of
+`saved_models/latest.tar`. `--recover` loads the model named by `--model-name` (default: `latest`),
+and `--recover-from <file>` loads a specific checkpoint, given either as a path or as a filename
+relative to the `saved_models` folder.
+
 Use a smaller episode count for a quick smoke run. Results, checkpoints, and videos are written under
 `scripts/out/`.
 

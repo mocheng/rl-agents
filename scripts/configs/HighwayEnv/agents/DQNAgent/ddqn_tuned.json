@@ -1,0 +1,6 @@
+{
+    "base_config": "configs/HighwayEnv/agents/DQNAgent/dqn.json",
+    "double": true,
+    "gamma": 0.99,
+    "target_update": 512
+}

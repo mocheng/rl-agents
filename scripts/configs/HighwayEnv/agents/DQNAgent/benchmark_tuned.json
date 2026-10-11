@@ -1,0 +1,7 @@
+{
+    "environments": ["configs/HighwayEnv/env_medium.json"],
+    "agents": [
+        "configs/HighwayEnv/agents/DQNAgent/dqn.json",
+        "configs/HighwayEnv/agents/DQNAgent/ddqn_tuned.json"
+    ]
+}

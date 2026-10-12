@@ -193,13 +193,10 @@ class Evaluation(object):
         if not actions:
             raise Exception("The agent did not plan any action")
 
-        # Forward the actions to the environment viewer
-        try:
-            self.env.unwrapped.viewer.set_agent_action_sequence(actions)
-        except AttributeError:
-            pass
-
-        # Step the environment
+        # Step the environment with the first planned action.
+        # The rest of the plan is not forwarded to the viewer: planners such as MCTS return
+        # multi-step plans that are re-computed at every step, so displaying them as a predicted
+        # trajectory shows ghost vehicles that are never actually driven.
         previous_observation, action = self.observation, actions[0]
         transition = self.wrapped_env.step(action)
         self.observation, reward, done, truncated, info = transition

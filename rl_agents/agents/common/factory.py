@@ -103,13 +103,20 @@ def load_environment(env_config, render_mode="video"):
     return env
 
 
-def preprocess_env(env, preprocessor_configs):
+def preprocess_env(env, preprocessor_configs, headless=True):
     """
         Apply a series of pre-processes to an environment, before it is used by an agent.
+
+        Preprocessors typically return a copy of the environment, used for simulation or planning.
+        With ``headless``, such copies are turned into headless shadow environments, so that
+        simulating them never draws the planning process on the display.
+
     :param env: an environment
     :param preprocessor_configs: a list of preprocessor configs
+    :param headless: whether the preprocessed copy should be a headless shadow environment
     :return: a preprocessed copy of the environment
     """
+    original_env = env
     for preprocessor_config in preprocessor_configs:
         if "method" in preprocessor_config:
             try:
@@ -122,20 +129,48 @@ def preprocess_env(env, preprocessor_configs):
                 logger.warning("The environment does not have a {} method".format(preprocessor_config["method"]))
         else:
             logger.error("The method is not specified in ", preprocessor_config)
+    if headless and env is not original_env:
+        disable_rendering(env)
     return env
 
 
-def safe_deepcopy_env(obj):
+def disable_rendering(env):
+    """
+        Turn an environment copy into a headless shadow environment, used for simulation only.
+
+        Planning copies must not render: highway-env renders at every step when render_mode is
+        'human', so a copied environment would create its own viewer and draw the simulated states
+        on the display, showing the planning process in the user interface.
+
+    :param env: an environment, or a copy of one
+    """
+    shadow = getattr(env, "unwrapped", env)
+    try:
+        shadow.viewer = None
+        shadow.render_mode = None
+    except AttributeError:
+        pass
+
+
+def safe_deepcopy_env(obj, headless=True):
     """
         Perform a deep copy of an environment but without copying its viewer.
+
+        :param obj: the environment to deep-copy
+        :param headless: if True (default), the copy is a headless shadow environment, used for
+                         simulation and planning: it keeps no render mode and never renders on the
+                         display. Set to False to preserve the render mode of the original env.
     """
     cls = obj.__class__
     result = cls.__new__(cls)
     memo = {id(obj): result}
+    non_copied = ['viewer', '_monitor', 'grid_render', 'video_recorder', '_record_video_wrapper']
+    if headless:
+        non_copied.append('render_mode')
     for k, v in obj.__dict__.items():
-        if k not in ['viewer', '_monitor', 'grid_render', 'video_recorder', '_record_video_wrapper']:
+        if k not in non_copied:
             if isinstance(v, gym.Env):
-                setattr(result, k, safe_deepcopy_env(v))
+                setattr(result, k, safe_deepcopy_env(v, headless=headless))
             else:
                 setattr(result, k, copy.deepcopy(v, memo=memo))
         else:

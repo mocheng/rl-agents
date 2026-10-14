@@ -22,6 +22,7 @@ Options:
   --repeat <times>       Repeat several times [default: 1].
 """
 import datetime
+import logging
 import os
 from pathlib import Path
 import gymnasium as gym
@@ -136,7 +137,7 @@ def benchmark(options):
         BENCHMARK_FILE, datetime.datetime.now().strftime('%Y%m%d-%H%M%S'), os.getpid()))
     with open(benchmark_filename, 'w') as f:
         json.dump(results, f, sort_keys=True, indent=4)
-        gym.logger.info('Benchmark done. Summary written in: {}'.format(benchmark_filename))
+        logging.getLogger(__name__).info('Benchmark done. Summary written in: {}'.format(benchmark_filename))
 
 
 def generate_agent_configs(benchmark_config, clean=False):

@@ -248,7 +248,7 @@ def rename(value, latex=True):
 
 
 if __name__ == "__main__":
-    configure("configs/logging.json", gym_level=gym.logger.INFO)
+    configure("configs/logging.json", gym_level=logging.INFO)
     selected_env = load_environment(envs["gridenv"])
     selected_agents = [
          "OPD",

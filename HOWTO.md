@@ -4,7 +4,7 @@ From the repository root, activate the virtual environment and install the proje
 
 ```bash
 source .venv/bin/activate
-python -m pip install "gymnasium==0.29.1" "numpy<2" tensorboard
+python -m pip install "gymnasium==1.4.0" "numpy<2" tensorboard
 python -m pip install -e .
 ```
 
@@ -40,11 +40,11 @@ Use a smaller episode count for a quick smoke run. Results, checkpoints, and vid
 
 ## HighwayEnv
 
-Install the driving environments (keep them pinned to the `gymnasium` version installed above; from
-`highway-env>=1.9` the dependency resolves to a `gymnasium>=1.0` that this project does not support):
+Install the driving environments (highway-env 1.12 requires gymnasium >= 1.0 and `pygame-ce`, the
+maintained drop-in replacement for `pygame`):
 
 ```bash
-python -m pip install "highway-env==1.8.2"
+python -m pip install "highway-env==1.12.1"
 ```
 
 Train a DQN agent on the 3-lane highway task:

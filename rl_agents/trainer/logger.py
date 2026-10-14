@@ -1,4 +1,5 @@
 import json
+import logging
 import logging.config
 from pathlib import Path
 import gymnasium as gym
@@ -35,15 +36,15 @@ logging_config = {
 }
 
 
-def configure(config={}, gym_level=gym.logger.INFO):
+def configure(config={}, gym_level=logging.INFO):
     """
         Configure logging.
 
         Update the default configuration by a configuration file.
-        Also configure the gym logger.
+        Also configure the gymnasium logger level.
 
     :param config: logging configuration, or path to a configuration file
-    :param gym_level: desired level for gym logger
+    :param gym_level: desired level for the gymnasium logger
     """
     if config:
         if isinstance(config, str):
@@ -51,7 +52,8 @@ def configure(config={}, gym_level=gym.logger.INFO):
                 config = json.load(f)
         Configurable.rec_update(logging_config, config)
     logging.config.dictConfig(logging_config)
-    gym.logger.set_level(gym_level)
+    # Gymnasium 1.x only exposes the warning/error logger; `min_level` controls it
+    gym.logger.min_level = gym_level
 
 
 def add_file_handler(file_path):

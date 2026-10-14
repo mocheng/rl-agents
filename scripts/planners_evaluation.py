@@ -127,7 +127,7 @@ def agent_configs():
 def evaluate(experiment):
     # Prepare workspace
     seed, budget, agent_config, env_config, path = experiment
-    gym.logger.set_level(gym.logger.DISABLED)
+    gym.logger.min_level = logging.CRITICAL
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
 

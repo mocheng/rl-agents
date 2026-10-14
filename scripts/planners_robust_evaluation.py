@@ -14,6 +14,7 @@ Options:
   --range <start:end>         Range of budgets to be plotted.
 """
 import itertools
+import logging
 from ast import literal_eval
 from pathlib import Path
 
@@ -68,7 +69,7 @@ def agent_configs():
 def evaluate(experiment):
     # Prepare workspace
     seed, agent_config, env_config, path = experiment
-    gym.logger.set_level(gym.logger.DISABLED)
+    gym.logger.min_level = logging.CRITICAL
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
 

@@ -9,7 +9,7 @@ from subprocess import PIPE, run, check_output
 import torch
 
 from gymnasium import error
-from gym.utils.seeding import RandomNumberGenerator
+from gymnasium.utils.seeding import RandomNumberGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +30,8 @@ def np_random(seed: Optional[int] = None) -> Tuple["RandomNumberGenerator", Any]
             seed_seq = seed
         else:
             raise error.Error(f"Seed must be a non-negative integer or omitted, not {seed}")
+    else:
+        seed_seq = np.random.SeedSequence()
     np_seed = seed_seq.entropy
     rng = RandomNumberGenerator(np.random.PCG64(seed_seq))
     return rng, np_seed

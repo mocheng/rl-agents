@@ -49,13 +49,17 @@ pip install --no-deps gymnasium==1.4.0 highway-env==1.12.1
 - The repo DQN, SB3 MSEDQN, and MCTS saved models still load and run; MCTS plans on headless shadow
   environments; human/video rendering work (CarRacing-v3 records mp4).
 - `pip check` is clean.
+- **Behavior-preserving on `env_medium`**: after re-training on the new stack, the SB3 MSEDQN and
+  Huber 500k evaluations are **byte-identical** to the 1.8.2 runs (all 50 episode rewards), and MCTS
+  budget 120 matches (68.33 mean, 0 crashes). The repo DQN lands within its known run-to-run
+  variance (2000 ep: 56.4 mean / 44% crash; 4000 ep: 68.3 / 16%). Paired results are unchanged:
+  MSE − Huber **+9.06**, MSEDQN − MCTS **+6.67**. The findings in `DQN_HIGHWAY_ENV_FINDINGS.md` and
+  `SB3_HIGHWAY_ENV_FINDINGS.md` therefore remain valid on this branch.
 
 ## Caveats
 
-- highway-env 1.8.2 → 1.12.1 changes simulation details. The old numeric results
-  (`DQN_HIGHWAY_ENV_FINDINGS.md`, `SB3_HIGHWAY_ENV_FINDINGS.md`) were measured on 1.8.2 and are
-  **not comparable**: a quick MCTS check on the same seed moved from ~68 to ~74. Re-evaluate or
-  retrain before drawing conclusions on this branch.
+- The re-validation above covers `env_medium`. Other environments (Intersection, Roundabout, Merge,
+  CarRacing) may still behave differently; re-evaluate them before relying on older numbers.
 - The virtual environment is shared: after checking out `master` (Gymnasium 0.29.1 code), the
   upgraded packages must be reverted:
 

@@ -2,6 +2,7 @@ import logging
 from pathlib import Path
 
 import numpy as np
+from gymnasium import spaces
 
 from rl_agents.agents.common.abstract import AbstractAgent
 
@@ -76,7 +77,9 @@ class SB3Agent(AbstractAgent):
         if self.model is None:
             raise RuntimeError("No Stable-Baselines3 model loaded. Use --recover-from <model.zip>.")
         action, _ = self.model.predict(np.asarray(state), deterministic=not self.training)
-        return int(np.asarray(action).item())
+        if isinstance(self.model.action_space, spaces.Discrete):
+            return int(np.asarray(action).item())
+        return np.asarray(action, dtype=np.float64)
 
     def plan(self, state):
         return [self.act(state)]

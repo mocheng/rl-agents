@@ -66,7 +66,9 @@ def load_environment(env_config, render_mode="video"):
     """
         Load an environment from a configuration file.
 
-    :param env_config: the configuration, or path to the environment configuration file
+    :param env_config: the configuration, or path to the environment configuration file.
+                       An optional "make_kwargs" entry is forwarded to `gym.make` (e.g. for
+                       CarRacing: {"continuous": false}).
     :param render_mode: output mode: headless, human, or video
     :return: the environment
     """
@@ -81,7 +83,8 @@ def load_environment(env_config, render_mode="video"):
     if render_mode not in GYM_RENDER_MODES:
         raise ValueError("Unknown render mode '{}'.".format(render_mode))
     try:
-        env = gym.make(env_config['id'], render_mode=GYM_RENDER_MODES[render_mode])
+        env = gym.make(env_config['id'], render_mode=GYM_RENDER_MODES[render_mode],
+                       **env_config.get("make_kwargs", {}))
         # Save env module in order to be able to import it again
         env.import_module = env_config.get("import_module", None)
     except KeyError:

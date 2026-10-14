@@ -16,10 +16,12 @@ import json
 from pathlib import Path
 
 from docopt import docopt
+from gymnasium import spaces
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import DummyVecEnv
 
 from rl_agents.agents.common.factory import load_agent_config, load_environment
+from rl_agents.agents.common.wrappers import Float64ActionWrapper
 from rl_agents.agents.sb3.agent import make_model
 
 
@@ -30,7 +32,10 @@ def main():
     env_config_path = opts["<environment>"]
     agent_config = load_agent_config(opts["<agent>"])
 
-    env = Monitor(load_environment(env_config_path, render_mode="headless"))
+    env = load_environment(env_config_path, render_mode="headless")
+    if isinstance(env.action_space, spaces.Box):
+        env = Float64ActionWrapper(env)
+    env = Monitor(env)
     vec_env = DummyVecEnv([lambda: env])
     vec_env.seed(seed)
 
@@ -53,6 +58,9 @@ def main():
                     model=str(model_path.with_suffix(".zip")))
     (output_dir / (name + ".json")).write_text(json.dumps(metadata, indent=4))
     print("Saved model to {}".format(model_path.with_suffix(".zip")))
+    print("Evaluate it with:\n  python experiments.py evaluate {} {} --test "
+          "--recover-from {} --episodes=5 --render human".format(
+              env_config_path, opts["<agent>"], model_path.with_suffix(".zip")))
 
 
 if __name__ == "__main__":

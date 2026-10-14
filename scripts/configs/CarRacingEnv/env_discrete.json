@@ -1,0 +1,6 @@
+{
+    "id": "CarRacing-v2",
+    "make_kwargs": {
+        "continuous": false
+    }
+}

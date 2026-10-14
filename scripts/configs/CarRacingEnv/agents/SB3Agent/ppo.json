@@ -1,0 +1,14 @@
+{
+    "__class__": "<class 'rl_agents.agents.sb3.agent.SB3Agent'>",
+    "algo": "PPO",
+    "policy": "CnnPolicy",
+    "model_kwargs": {
+        "n_steps": 512,
+        "batch_size": 64,
+        "n_epochs": 10,
+        "gamma": 0.99,
+        "gae_lambda": 0.95,
+        "learning_rate": 3e-4,
+        "ent_coef": 0.0
+    }
+}

@@ -1,4 +1,5 @@
 import gymnasium as gym
+import numpy as np
 import pytest
 
 pytest.importorskip("stable_baselines3")
@@ -32,3 +33,21 @@ def test_algorithm_factory_and_agent(tmp_path):
 
     saved = agent.save(tmp_path / "again.tar")
     assert saved.name == "again.zip"
+
+
+def test_continuous_action_is_cast_to_float64():
+    from rl_agents.agents.sb3.agent import SB3Agent
+
+    env = gym.make('CartPole-v0')
+
+    class StubModel:
+        action_space = gym.spaces.Box(-1, 1, (3,), dtype=np.float32)
+
+        def predict(self, obs, deterministic=True):
+            return np.array([0.1, 0.5, 0.0], dtype=np.float32), None
+
+    agent = SB3Agent(env)
+    agent.model = StubModel()
+    action = agent.act(np.zeros(3))
+    assert isinstance(action, np.ndarray)
+    assert action.dtype == np.float64

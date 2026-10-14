@@ -1,6 +1,8 @@
 import copy
 
 import gymnasium as gym
+import numpy as np
+import pytest
 
 
 def test_safe_deepcopy_env_is_headless():
@@ -70,3 +72,25 @@ def test_preprocess_env_can_preserve_rendering():
     # The copying of rendering state is left to the preprocessor
     assert shadow.render_mode == "human"
     assert shadow.viewer is not None
+
+
+def test_load_environment_make_kwargs():
+    pytest.importorskip("Box2D")
+    from rl_agents.agents.common.factory import load_environment
+
+    env = load_environment({"id": "CarRacing-v2", "make_kwargs": {"continuous": False}},
+                           render_mode="headless")
+    assert env.action_space.n == 5
+    env.close()
+
+
+def test_float64_action_wrapper():
+    pytest.importorskip("Box2D")
+    from rl_agents.agents.common.factory import load_environment
+    from rl_agents.agents.common.wrappers import Float64ActionWrapper
+
+    env = Float64ActionWrapper(load_environment({"id": "CarRacing-v2"}, render_mode="headless"))
+    env.reset(seed=0)
+    # Float32 actions are rejected by the box2d bindings; the wrapper converts them to float64
+    env.step(np.array([0.0, 0.5, 0.0], dtype=np.float32))
+    env.close()

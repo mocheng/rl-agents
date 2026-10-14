@@ -1,0 +1,20 @@
+{
+    "__class__": "<class 'rl_agents.agents.sb3.agent.SB3Agent'>",
+    "algo": "DQN",
+    "policy": "MlpPolicy",
+    "model_kwargs": {
+        "gamma": 0.8,
+        "learning_rate": 5e-4,
+        "batch_size": 32,
+        "buffer_size": 15000,
+        "target_update_interval": 50,
+        "train_freq": 1,
+        "learning_starts": 100,
+        "exploration_initial_eps": 1.0,
+        "exploration_final_eps": 0.05,
+        "exploration_fraction": 0.1
+    },
+    "policy_kwargs": {
+        "net_arch": [256, 256]
+    }
+}

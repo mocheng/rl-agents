@@ -1,0 +1,15 @@
+{
+    "__class__": "<class 'rl_agents.agents.sb3.agent.SB3Agent'>",
+    "algo": "PPO",
+    "policy": "MlpPolicy",
+    "model_kwargs": {
+        "n_steps": 2048,
+        "batch_size": 64,
+        "gamma": 0.8,
+        "learning_rate": 3e-4,
+        "ent_coef": 0.0
+    },
+    "policy_kwargs": {
+        "net_arch": [256, 256]
+    }
+}

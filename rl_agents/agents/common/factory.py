@@ -164,7 +164,8 @@ def safe_deepcopy_env(obj, headless=True):
     cls = obj.__class__
     result = cls.__new__(cls)
     memo = {id(obj): result}
-    non_copied = ['viewer', '_monitor', 'grid_render', 'video_recorder', '_record_video_wrapper']
+    non_copied = ['viewer', '_monitor', 'grid_render', 'video_recorder', '_record_video_wrapper',
+                  'screen', 'surf', 'clock', 'isopen']
     if headless:
         non_copied.append('render_mode')
     for k, v in obj.__dict__.items():

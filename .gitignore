@@ -12,6 +12,7 @@ _build
 
 # Editor files
 .idea
+.DS_Store
 
 # Test files
 .pytest_cache

@@ -103,6 +103,14 @@ def load_environment(env_config, render_mode="video"):
         env.reset()
     except AttributeError as e:
         logger.info("This environment does not support configuration. {}".format(e))
+
+    # Apply optional wrappers (e.g. image preprocessing for pixel-based environments)
+    for wrapper_config in env_config.get("wrappers", []):
+        wrapper_class = getattr(gym.wrappers, wrapper_config["type"], None)
+        if wrapper_class is None:
+            from rl_agents.agents.common import wrappers
+            wrapper_class = getattr(wrappers, wrapper_config["type"])
+        env = wrapper_class(env, **wrapper_config.get("kwargs", {}))
     return env
 
 

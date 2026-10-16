@@ -16,6 +16,58 @@ class Float64ActionWrapper(gym.ActionWrapper):
         return np.asarray(action, dtype=np.float64)
 
 
+class PunishActionReward(gym.RewardWrapper):
+    """
+        Subtract a penalty whenever a given action is chosen.
+
+        Used for CarRacing, where doing nothing (action 0) is a local optimum: the car collects the
+        per-step time penalty while avoiding the risk of driving off the track.
+    """
+
+    def __init__(self, env, action=0, penalty=0.1):
+        super().__init__(env)
+        self.action = action
+        self.penalty = penalty
+        self.last_action = None
+
+    def reset(self, **kwargs):
+        self.last_action = None
+        return super().reset(**kwargs)
+
+    def step(self, action):
+        self.last_action = action
+        return super().step(action)
+
+    def reward(self, reward):
+        if self.last_action is not None and int(self.last_action) == self.action:
+            reward = reward - self.penalty
+        return reward
+
+
+class FrameSkip(gym.Wrapper):
+    """
+        Repeat each action for `skip` environment steps and sum the rewards.
+
+        Standard practice for pixel-based control: it reduces the decision frequency, lengthens the
+        effective planning horizon and stabilizes the learned control.
+    """
+
+    def __init__(self, env, skip=4):
+        super().__init__(env)
+        self.skip = skip
+
+    def step(self, action):
+        total_reward = 0.0
+        terminated = truncated = False
+        observation, info = None, {}
+        for _ in range(self.skip):
+            observation, reward, terminated, truncated, info = self.env.step(action)
+            total_reward += reward
+            if terminated or truncated:
+                break
+        return observation, total_reward, terminated, truncated, info
+
+
 class PreprocessImage(gym.ObservationWrapper):
     """
         Preprocess image observations: optional grayscale, downscaling and frame stacking.

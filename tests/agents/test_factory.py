@@ -114,6 +114,41 @@ class DummyImageEnv(gym.Env):
         return observation, 0.0, self.t >= 100, False, {}
 
 
+class DummyRewardEnv(gym.Env):
+    """A tiny environment with a constant reward, to test reward wrappers."""
+
+    def __init__(self):
+        self.observation_space = gym.spaces.Box(0, 1, (2,), dtype=np.float32)
+        self.action_space = gym.spaces.Discrete(5)
+
+    def reset(self, **kwargs):
+        return np.zeros(2, dtype=np.float32), {}
+
+    def step(self, action):
+        return np.zeros(2, dtype=np.float32), 1.0, False, False, {}
+
+
+def test_punish_action_reward():
+    from rl_agents.agents.common.wrappers import PunishActionReward
+
+    env = PunishActionReward(DummyRewardEnv(), action=0, penalty=0.1)
+    env.reset(seed=0)
+    _, penalized, *_ = env.step(0)
+    env.reset(seed=0)
+    _, other, *_ = env.step(1)
+    assert penalized == pytest.approx(0.9)
+    assert other == pytest.approx(1.0)
+
+
+def test_frame_skip():
+    from rl_agents.agents.common.wrappers import FrameSkip
+
+    env = FrameSkip(DummyRewardEnv(), skip=4)
+    env.reset(seed=0)
+    _, reward, *_ = env.step(0)
+    assert reward == pytest.approx(4.0)
+
+
 def test_preprocess_image_wrapper():
     from rl_agents.agents.common.wrappers import PreprocessImage
 

@@ -1,0 +1,29 @@
+{
+    "id": "CarRacing-v3",
+    "make_kwargs": {
+        "continuous": false
+    },
+    "wrappers": [
+        {
+            "type": "FrameSkip",
+            "kwargs": {
+                "skip": 4
+            }
+        },
+        {
+            "type": "PunishActionReward",
+            "kwargs": {
+                "action": 0,
+                "penalty": 0.1
+            }
+        },
+        {
+            "type": "PreprocessImage",
+            "kwargs": {
+                "size": 84,
+                "grayscale": true,
+                "frame_stack": 4
+            }
+        }
+    ]
+}

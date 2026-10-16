@@ -10,6 +10,7 @@ Options:
   --name <name>      Model file name, without extension [default: latest].
   --output <dir>     Output directory [default: out/SB3].
   --tensorboard      Log training scalars to TensorBoard in the output directory.
+  --checkpoint-freq <steps>  Save a checkpoint every N timesteps; 0 disables [default: 50000].
 """
 import datetime
 import json
@@ -17,6 +18,7 @@ from pathlib import Path
 
 from docopt import docopt
 from gymnasium import spaces
+from stable_baselines3.common.callbacks import CheckpointCallback
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import DummyVecEnv
 
@@ -48,9 +50,14 @@ def main():
 
     model = make_model(agent_config, vec_env, seed=seed,
                        tensorboard_log=str(output_dir / "tensorboard") if opts["--tensorboard"] else None)
+    checkpoint_freq = int(opts["--checkpoint-freq"])
+    callback = None
+    if checkpoint_freq > 0:
+        callback = CheckpointCallback(save_freq=checkpoint_freq, save_path=str(output_dir),
+                                      name_prefix=name, save_replay_buffer=False, save_vecnormalize=False)
     print("Training Stable-Baselines3 {} for {} steps on {} (seed {})".format(
         agent_config["algo"], steps, env_config_path, seed))
-    model.learn(total_timesteps=steps, progress_bar=False)
+    model.learn(total_timesteps=steps, progress_bar=False, callback=callback)
 
     model_path = output_dir / name
     model.save(model_path)

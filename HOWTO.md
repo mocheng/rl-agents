@@ -4,8 +4,7 @@ From the repository root, activate the virtual environment and install the proje
 
 ```bash
 source .venv/bin/activate
-python -m pip install "gymnasium==1.4.0" "numpy<2" tensorboard
-python -m pip install -e .
+uv sync            # or: python -m pip install -e ".[dev]"
 ```
 
 Train a CartPole DQN agent without rendering:

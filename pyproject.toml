@@ -1,0 +1,74 @@
+[build-system]
+requires = ["setuptools>=77", "setuptools-scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rl-agents"
+dynamic = ["version"]
+description = "A collection of Reinforcement Learning agents"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+keywords = ["reinforcement learning", "agents"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Researchers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+dependencies = [
+    "gymnasium>=1.0",
+    "numpy",
+    "pandas",
+    "numba",
+    "pygame-ce",
+    "matplotlib",
+    "seaborn",
+    "six",
+    "docopt",
+    "torch>=2.0",
+    "tensorboardX",
+    "tensorboard",
+    "moviepy",
+    "scipy",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "ruff",
+]
+# JAX-native agents (jax_agents package) and Jumanji environments.
+# See JUMANJI_INTEGRATION.md on the `jax` branch for the design and the
+# dependency matrix. Note: jumanji requires jax<0.8.
+jax = [
+    "jax>=0.4.27,<0.8",
+    "jaxlib>=0.4.27,<0.8",
+    "jumanji>=1.1",
+    "flax",
+    "optax",
+    "chex",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "ruff",
+]
+
+[tool.setuptools.packages.find]
+include = ["rl_agents*"]
+exclude = ["scripts*", "tests*", "docs*"]
+
+[tool.setuptools_scm]
+fallback_version = "1.0.dev0"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"

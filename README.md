@@ -29,7 +29,14 @@ This repo is a fork of [eleurent](https://github.com/eleurent/rl-agents) which i
 
 # Installation
 
-`pip install --user git+https://github.com/eleurent/rl-agents`
+The project is packaged with `pyproject.toml` (PEP 621) and its version is derived from git tags
+(setuptools-scm). Install from a checkout with uv (recommended) or pip:
+
+```bash
+uv sync            # installs the project and the dev dependencies into .venv
+# or
+pip install -e .   # base install; add .[dev] or .[jax] for the extras
+```
 
 
 # Usage

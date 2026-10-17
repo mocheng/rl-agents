@@ -149,6 +149,39 @@ def test_frame_skip():
     assert reward == pytest.approx(4.0)
 
 
+class DummySpeedEnv(DummyRewardEnv):
+    """A tiny environment with a settable speed, to test the stall penalty."""
+
+    def __init__(self):
+        super().__init__()
+        self.speed = 0.0
+
+
+def test_punish_stall_reward():
+    from rl_agents.agents.common.wrappers import PunishStallReward
+
+    base = DummySpeedEnv()
+    env = PunishStallReward(base, min_speed=2.0, penalty=0.1, speed_fn=lambda e: e.speed)
+
+    env.reset(seed=0)
+    base.speed = 0.5
+    _, stalled, *_ = env.step(0)
+    assert stalled == pytest.approx(0.9)
+
+    env.reset(seed=0)
+    base.speed = 30.0
+    _, rolling, *_ = env.step(0)
+    assert rolling == pytest.approx(1.0)
+
+    # The penalty can be restricted to a given action
+    env.reset(seed=0)
+    base.speed = 0.5
+    gated = PunishStallReward(base, min_speed=2.0, penalty=0.1, action=0, speed_fn=lambda e: e.speed)
+    gated.reset(seed=0)
+    _, not_gated_action, *_ = gated.step(1)
+    assert not_gated_action == pytest.approx(1.0)
+
+
 def test_preprocess_image_wrapper():
     from rl_agents.agents.common.wrappers import PreprocessImage
 

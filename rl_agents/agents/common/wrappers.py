@@ -44,6 +44,47 @@ class PunishActionReward(gym.RewardWrapper):
         return reward
 
 
+class PunishStallReward(gym.RewardWrapper):
+    """
+        Penalize stalling: subtract a penalty whenever the vehicle's speed is below a threshold.
+
+        Unlike punishing a fixed action, this targets the stalling behaviour itself and leaves
+        coasting at speed unpenalized. The penalty can optionally be restricted to a given action.
+    """
+
+    def __init__(self, env, min_speed=2.0, penalty=0.1, action=None, speed_fn=None):
+        super().__init__(env)
+        self.min_speed = min_speed
+        self.penalty = penalty
+        self.action = action
+        self.speed_fn = speed_fn or self._car_speed
+        self.last_action = None
+        self.last_speed = None
+
+    def reset(self, **kwargs):
+        self.last_action = None
+        self.last_speed = None
+        return super().reset(**kwargs)
+
+    def step(self, action):
+        self.last_action = action
+        self.last_speed = self.speed_fn(self.env)
+        return super().step(action)
+
+    def reward(self, reward):
+        if self.last_speed is not None and self.last_speed < self.min_speed:
+            if self.action is None or int(self.last_action) == self.action:
+                reward = reward - self.penalty
+        return reward
+
+    @staticmethod
+    def _car_speed(env):
+        try:
+            return float(env.unwrapped.car.hull.linearVelocity.length)
+        except AttributeError:
+            return float("inf")
+
+
 class FrameSkip(gym.Wrapper):
     """
         Repeat each action for `skip` environment steps and sum the rewards.

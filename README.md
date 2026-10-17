@@ -133,6 +133,23 @@ There are several tools available to monitor the agent performances:
 * [*Tensorboard*](https://github.com/lanpa/tensorboardX): by default, a tensoboard writer records information about useful scalars, images and model graphs to the run directory. Deep Q-network agents additionally log the histograms and norms of their weights and gradients every `statistics_frequency` updates (1000 by default; set it to `0` in the agent configuration to disable). It can be visualized by running:
 ```tensorboard --logdir <path-to-runs-dir>```
 
+# JAX / Jumanji
+
+A separate top-level package, [`jax_agents`](jax_agents), provides JAX-native agents and bindings for
+[Jumanji](https://github.com/instadeepai/jumanji) environments, following the same configuration pattern:
+
+```bash
+pip install -e ".[jax]"
+cd scripts
+python jax_train.py configs/Sokoban/env.json configs/Sokoban/JaxDQNAgent.json --steps 200000
+python experiments.py evaluate configs/Sokoban/env.json configs/Sokoban/JaxDQNAgent.json --test --recover --no-display
+```
+
+The JAX DQN agent trains with jitted, vectorized rollouts (`num_envs` parallel environments under
+`jax.jit(jax.vmap(...))` + `jax.lax.scan`) and jitted double-DQN updates (flax + optax). Legacy code
+does not import the JAX package; see [JUMANJI_INTEGRATION.md](JUMANJI_INTEGRATION.md) for the design
+and the dependency/device notes.
+
 # Agents
 
 The following agents are currently implemented:

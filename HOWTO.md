@@ -79,3 +79,45 @@ All summaries of a run share a single x-axis: the number of environment steps ex
 directly (`episode/index` gives the episode number on that axis).
 
 Gymnasium may warn that `CartPole-v0` is deprecated; this is the environment currently named by the repository configuration.
+
+## Jumanji / JAX (Sokoban)
+
+The `jax_agents` package trains JAX-native agents on [Jumanji](https://github.com/instadeepai/jumanji)
+environments. See [JUMANJI_INTEGRATION.md](JUMANJI_INTEGRATION.md) for the design.
+
+```bash
+python -m pip install -e ".[jax]"
+```
+
+Train a JAX DQN on Sokoban with jitted, vectorized rollouts (`num_envs` parallel environments):
+
+```bash
+cd scripts
+python jax_train.py \
+  configs/Sokoban/env.json \
+  configs/Sokoban/JaxDQNAgent.json \
+  --steps 200000 --seed 0
+```
+
+Evaluate the latest checkpoint through the usual evaluation loop:
+
+```bash
+python experiments.py evaluate \
+  configs/Sokoban/env.json \
+  configs/Sokoban/JaxDQNAgent.json \
+  --test --recover --episodes 10 --no-display
+```
+
+Jumanji environments do not render rgb frames, so always pass `--no-display`. Results and checkpoints
+(now `.npz` instead of `.tar`) are written under `scripts/out/JAX/Sokoban` as usual.
+
+Notes:
+- The default environment config uses the offline `ToyGenerator` (two hand-crafted levels). For real
+  training, switch `generator` in `configs/Sokoban/env.json` to
+  `jumanji.environments.routing.sokoban.generator.HuggingFaceDeepMindGenerator` with `dataset_name`
+  and `proportion_of_files` — the DeepMind dataset downloads from HuggingFace on first use.
+- Sokoban is a hard exploration problem; expect to train hundreds of thousands of steps on the toy
+  levels (millions on the full dataset), as with Jumanji's own baselines.
+- The agent `device` config (`auto|cpu|gpu`) selects a CUDA GPU on Linux. The Apple Silicon Metal
+  plugin (jax-metal) does not support neural-network ops on Python 3.13 — see the design doc.
+- Training with XLA does not mix well with multiprocessing (`--processes 1` for benchmarks).

@@ -1,0 +1,4 @@
+{
+    "environments": ["configs/Sokoban/env.json"],
+    "agents": ["configs/Sokoban/JaxDQNAgent.json"]
+}

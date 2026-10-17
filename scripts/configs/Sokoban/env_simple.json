@@ -1,0 +1,10 @@
+{
+    "id": "jumanji/Sokoban-v0",
+    "import_module": "jax_agents.envs",
+    "make_kwargs": {
+        "generator": {
+            "__class__": "jumanji.environments.routing.sokoban.generator.SimpleSolveGenerator"
+        },
+        "time_limit": 120
+    }
+}

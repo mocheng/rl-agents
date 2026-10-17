@@ -1,0 +1,27 @@
+{
+    "__class__": "<class 'jax_agents.agents.dqn.JaxDQNAgent'>",
+    "model": {
+        "type": "ConvEncoder",
+        "channels": [32, 64],
+        "head_layers": [128]
+    },
+    "gamma": 0.97,
+    "learning_rate": 1e-3,
+    "grad_norm_clipping": 10.0,
+    "batch_size": 256,
+    "memory_capacity": 50000,
+    "target_update": 250,
+    "double": true,
+    "num_envs": 64,
+    "rollout_steps": 16,
+    "updates_per_batch": 64,
+    "total_steps": 60000,
+    "n_steps": 8,
+    "exploration": {
+        "method": "EpsilonGreedy",
+        "initial": 1.0,
+        "final": 0.02,
+        "tau": 30000
+    },
+    "device": "auto"
+}

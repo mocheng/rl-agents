@@ -63,6 +63,7 @@ def test_max_expectation_constrained():
     assert kl <= c + 1e-1
 
     # Random distribution
+    np.random.seed(42)
     for _ in range(100):
         q = np.random.random(10)
         q /= q.sum()

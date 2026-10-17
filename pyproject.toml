@@ -55,8 +55,10 @@ jax = [
 
 [dependency-groups]
 dev = [
+    "box2d>=2.3.10",
     "pytest",
     "ruff",
+    "stable-baselines3>=2.9.0",
 ]
 
 [tool.setuptools.packages.find]

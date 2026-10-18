@@ -17,6 +17,7 @@ from rl_agents.agents.common.memory import Transition
 from rl_agents.utils import near_split, zip_with_singletons
 from rl_agents.configuration import serialize
 from rl_agents.trainer.graphics import RewardViewer
+from rl_agents.trainer.statistics import log_training_progress
 
 logger = logging.getLogger(__name__)
 
@@ -355,7 +356,7 @@ class Evaluation(object):
         except NotImplementedError:
             pass
 
-    def after_all_episodes(self, episode, rewards, duration):
+    def after_all_episodes(self, episode, rewards, duration=None):
         rewards = np.array(rewards)
         gamma = self.agent.config.get("gamma", 1)
         # All episode summaries are indexed by the run-global step, so that they share an x-axis
@@ -366,6 +367,11 @@ class Evaluation(object):
         self.writer.add_scalar('episode/return', sum(r*gamma**t for t, r in enumerate(rewards)), self.global_step)
         self.writer.add_scalar('episode/fps', len(rewards) / max(duration, 1e-6), self.global_step)
         self.writer.add_histogram('episode/rewards', rewards, self.global_step)
+        exploration = getattr(self.agent, "exploration_policy", None)
+        epsilon = getattr(exploration, "epsilon", None)
+        log_training_progress(logger, self.agent.__class__.__name__, self.global_step, episode + 1,
+                              epsilon=epsilon,
+                              steps_per_second=len(rewards) / duration if duration else None)
         logger.info("Episode {} score: {:.1f}".format(episode, sum(rewards)))
 
     def after_some_episodes(self, episode, rewards,

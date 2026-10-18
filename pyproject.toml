@@ -34,6 +34,8 @@ dependencies = [
     "tensorboard",
     "moviepy",
     "scipy",
+    "torchrl[torchrl]>=0.7",
+    "highway-env[highway]==1.12.1",
 ]
 
 [project.optional-dependencies]
@@ -41,16 +43,13 @@ dev = [
     "pytest",
     "ruff",
 ]
-# JAX-native agents (jax_agents package) and Jumanji environments.
-# See JUMANJI_INTEGRATION.md on the `jax` branch for the design and the
-# dependency matrix. Note: jumanji requires jax<0.8.
-jax = [
-    "jax>=0.4.27,<0.8",
-    "jaxlib>=0.4.27,<0.8",
-    "jumanji>=1.1",
-    "flax",
-    "optax",
-    "chex",
+# Batch-parallel DQN training with torchrl (see TORCHRL_INTEGRATION.md)
+torchrl = [
+    "torchrl>=0.7",
+]
+# Driving environments (see HOWTO.md): highway-env 1.12 requires gymnasium>=1.0
+highway = [
+    "highway-env==1.12.1",
 ]
 
 [dependency-groups]

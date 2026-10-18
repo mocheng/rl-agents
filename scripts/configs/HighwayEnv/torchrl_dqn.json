@@ -1,0 +1,31 @@
+{
+    "__class__": "<class 'rl_agents.agents.torchrl.dqn.TorchRLDQNAgent'>",
+    "model": {
+        "type": "MultiLayerPerceptron",
+        "layers": [256, 256]
+    },
+    "double": false,
+    "loss_function": "l2",
+    "optimizer": {
+        "lr": 5e-4
+    },
+    "gamma": 0.8,
+    "n_steps": 1,
+    "batch_size": 32,
+    "memory_capacity": 15000,
+    "target_update": 50,
+    "prioritized": false,
+    "num_envs": 8,
+    "frames_per_batch": 256,
+    "updates_per_batch": "auto",
+    "collector_backend": "batched",
+    "total_steps": 100000,
+    "checkpoint_frequency": 20,
+    "exploration": {
+        "method": "EpsilonGreedy",
+        "tau": 6000,
+        "temperature": 1.0,
+        "final_temperature": 0.05
+    },
+    "device": "auto"
+}

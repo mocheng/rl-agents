@@ -1,0 +1,30 @@
+{
+    "__class__": "<class 'rl_agents.agents.torchrl.dqn.TorchRLDQNAgent'>",
+    "model": {
+        "type": "ConvolutionalNetwork"
+    },
+    "double": true,
+    "loss_function": "l2",
+    "optimizer": {
+        "lr": 1e-4
+    },
+    "gamma": 0.95,
+    "n_steps": 1,
+    "batch_size": 64,
+    "memory_capacity": 50000,
+    "target_update": 1000,
+    "prioritized": false,
+    "num_envs": 4,
+    "frames_per_batch": 128,
+    "updates_per_batch": "auto",
+    "collector_backend": "batched",
+    "total_steps": 50000,
+    "checkpoint_frequency": 50,
+    "exploration": {
+        "method": "EpsilonGreedy",
+        "tau": 50000,
+        "temperature": 1.0,
+        "final_temperature": 0.05
+    },
+    "device": "auto"
+}

@@ -10,6 +10,7 @@ Options:
   --seed <seed>      Random seed [default: 0].
   --output <dir>     Output directory [default: out/TorchRL].
 """
+import json
 from pathlib import Path
 
 from docopt import docopt
@@ -26,6 +27,11 @@ def main():
     agent_config_path = opts["<agent>"]
 
     env = load_environment(env_config_path, render_mode="headless")
+    # Forward the environment make kwargs and wrappers to the torchrl rollout workers
+    with open(env_config_path) as f:
+        env_config_data = json.loads(f.read())
+    env.make_kwargs = env_config_data.get("make_kwargs", {})
+    env.wrappers_config = env_config_data.get("wrappers", [])
     agent = load_agent(agent_config_path, env)
     agent.update_config({"total_steps": steps})
 

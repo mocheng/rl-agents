@@ -74,11 +74,17 @@ Agent config keys mirror the pytorch DQN (`model`, `double`, `loss_function`, `o
 - Rollouts use an explicit in-process loop over torchrl's `SerialEnv` (batched policy calls, no
   subprocesses): torchrl 0.14's `Collector` process backend and `ParallelEnv` proved unstable on
   macOS (random mid-run hangs, spawn-related worker failures).
-- The environment configuration is applied through `env._env.unwrapped.configure(env_config)` — the
-  same highway-env convention as the repository's `load_environment` — inside the worker factory.
-- The repository's value networks are prepended with a batch-safe flattening layer: torchrl calls
-  the policy with unbatched observations for the first rollout step, and highway observations are
-  2D `(vehicles, features)` matrices.
+- The rollout loop uses `step_and_maybe_reset`, torchrl's designed API for non-stopping rollouts:
+  it returns the transition (with the real reward and done flags under `"next"`) and an
+  auto-reset tensordict carrying into the next step.
+- The environment factory instantiates the environment with its `make_kwargs` (e.g. CarRacing's
+  `continuous: false`), applies the repository's environment configuration through `configure`
+  (the highway-env convention) and the repository wrappers (frame skip, reward shaping, image
+  preprocessing), then exposes it through torchrl's `GymWrapper`.
+- The repository's value networks are reused: vector observations are prefixed with a batch-safe
+  flattening layer (torchrl calls the policy with unbatched observations for the first rollout
+  step), and `ConvolutionalNetwork` models consume the channel-first image observations directly
+  (cast to float32) — e.g. CarRacing's `(4, 84, 84)` frame stack from `PreprocessImage`.
 
 ## Measured results (M1 Pro, CPU, same model configs and learning rates)
 
@@ -86,24 +92,27 @@ Agent config keys mirror the pytorch DQN (`model`, `double`, `loss_function`, `o
 |---|---|---|---|
 | CartPole-v0, ~27k env steps | 649 steps/s (42.2s) | 6578 steps/s (8.5s) | **10.1×** |
 | CartPole-v0, test score (10 episodes) | 9.0–10.0 | 9.0–10.0 | equal |
+| CarRacing-v3 (frameskip 4, 84×84 grayscale), 10k steps | — | ~52 steps/s (3m18s), 36 episodes | — |
 | HighwayEnv medium, 20k steps | — | ~79 steps/s (4m19s), test score ≈ 21 | env-bound |
 | HighwayEnv medium, 80k steps (legacy) | ~122 steps/s (10m55s), test score ≈ 66 | — | — |
 
 Findings:
 - **The throughput win is real when the environment is cheap** (CartPole): batching removes the
   per-step Python/torch overhead that dominates the legacy loop.
-- **Highway-env is simulation-bound on CPU** (~12.6ms/step in pure Python): in-process batching
-  cannot parallelize the GIL-bound simulator, so torchrl is neutral there on this machine.
-  Parallel collection (subprocesses) would help on Linux; the GPU batch-update path applies
-  to CUDA machines.
+- **Expensive simulators bound the speedup on CPU**: highway-env (~12.6ms/step) and CarRacing
+  (image preprocessing + Box2D) dominate the per-step cost, so in-process batching helps only
+  marginally there; parallel collection (subprocesses) would help on Linux, and GPU batch
+  updates apply to CUDA machines.
 - Learning results are identical for equal hyperparameters (same networks, same TD(0) loss).
+- CarRacing needs far more than 10k steps to drive (test scores around -64…-106); treat the
+  current run as a smoke test of the pixel-based pipeline.
 
 ## Limitations / notes
 
 - torchrl 0.14 API differs from older tutorials (`SyncDataCollector` → `Collector`, `DQNLoss`
   requires `make_value_estimator(ValueEstimators.TD0, gamma=...)`, `QValueModule(action_space=...)`
   takes the string `"categorical"` plus `spec=`).
-- Env wrappers from the repository env configs (`"wrappers": [...]`) are not replayed in the torchrl
-  workers; only the `configure` convention and `gym.make` are used.
+- `GymWrapper` (wrapping an existing gym env) exposes transitions in the torchrl layout, with
+  reward and done flags under `"next"` — hence the `step_and_maybe_reset` rollout loop.
 - `--test` and checkpoints reuse the usual conventions (`.tar` torch checkpoints, `--recover`).
 - Prioritized replay is wired but not benchmarked yet (`"prioritized": true` + alpha/beta).

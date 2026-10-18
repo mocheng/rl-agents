@@ -63,7 +63,8 @@ class ProgressCallback(BaseCallback):
         print(format_training_progress(self.name, self.num_timesteps, self._episode_count(),
                                        loss=logger_values.get("train/loss"),
                                        epsilon=logger_values.get("train/exploration_rate"),
-                                       steps_per_second=self.num_timesteps / max(elapsed, 1e-6)))
+                                       steps_per_second=self.num_timesteps / max(elapsed, 1e-6),
+                                       time=elapsed))
         return True
 
 

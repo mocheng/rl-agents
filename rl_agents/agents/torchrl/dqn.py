@@ -4,17 +4,20 @@ import importlib
 from pathlib import Path
 
 import numpy as np
+import gymnasium as gym
 
 import torch
 from gymnasium import spaces
 from tensordict.nn import TensorDictModule, TensorDictSequential
 from torchrl.data import Categorical, PrioritizedReplayBuffer, TensorDictReplayBuffer
 from torchrl.data.replay_buffers.storages import LazyMemmapStorage
-from torchrl.envs import GymEnv, SerialEnv
+from torchrl.envs import SerialEnv
+from torchrl.envs.libs.gym import GymWrapper
 from torchrl.modules import EGreedyModule, QValueModule
 from torchrl.objectives import DQNLoss, ValueEstimators
 from torchrl.objectives.utils import HardUpdate
 
+from rl_agents.agents.common import wrappers as repo_wrappers
 from rl_agents.agents.common.abstract import AbstractAgent
 from rl_agents.agents.common.models import model_factory, size_model_config
 from rl_agents.trainer.statistics import log_training_progress
@@ -22,23 +25,30 @@ from rl_agents.trainer.statistics import log_training_progress
 logger = logging.getLogger(__name__)
 
 
-def _create_torchrl_env(env_id, device, import_module=None, env_config=None):
+def _create_torchrl_env(env_id, device, import_module=None, env_config=None, make_kwargs=None,
+                        wrapper_configs=None):
     """
-        Module-level environment factory (picklable, required by the process backend).
-        Imports the environment module (e.g. highway_env) in the worker process, instantiates
-        the environment and applies the repository environment configuration through
-        `configure` (the highway-env convention).
+        Module-level environment factory (picklable). Imports the environment module, instantiates
+        the environment with its make kwargs, applies the repository environment configuration
+        through `configure` (the highway-env convention) and the repository wrappers (frame skip,
+        reward shaping, image preprocessing), then exposes it through the torchrl `GymWrapper`.
+
+        Note: `GymWrapper` follows the transition layout, with the reward under `("next", "reward").
     """
     if import_module:
         importlib.import_module(import_module)
-    env = GymEnv(env_id, device=device, render_mode=None)
-    base_env = getattr(env, "_env", None)
-    if env_config and base_env is not None:
-        target = getattr(base_env, "unwrapped", base_env)
+    env = gym.make(env_id, render_mode=None, **(make_kwargs or {}))
+    if env_config:
+        target = getattr(env, "unwrapped", env)
         if hasattr(target, "configure"):
             target.configure(env_config)
-            env.reset()  # apply the configuration
-    return env
+    for wrapper_config in wrapper_configs or []:
+        wrapper_class = getattr(gym.wrappers, wrapper_config["type"], None)
+        if wrapper_class is None:
+            wrapper_class = getattr(repo_wrappers, wrapper_config["type"])
+        env = wrapper_class(env, **wrapper_config.get("kwargs", {}))
+    env.reset()  # apply the configuration and initialize wrapper state (e.g. frame stacking)
+    return GymWrapper(env, device=device)
 
 
 class _Flatten(torch.nn.Module):
@@ -54,9 +64,20 @@ class _Flatten(torch.nn.Module):
         self.obs_dims = obs_dims
 
     def forward(self, x):
+        x = x.float()
         if self.obs_dims <= 1:
             return x.reshape(-1, x.shape[-1])
         return x.reshape(-1, int(np.prod(x.shape[-self.obs_dims:])))
+
+
+class _CastFloat(torch.nn.Module):
+    """
+        Cast a (batch of) observation(s) to float32, for convolutional networks over
+        channel-first image observations.
+    """
+
+    def forward(self, x):
+        return x.float()
 
 
 class TorchRLDQNAgent(AbstractAgent):
@@ -133,11 +154,15 @@ class TorchRLDQNAgent(AbstractAgent):
         action_spec = Categorical(n=int(self.env.action_space.n), device=self.device)
         # The repository models expect a batch of vectors; torchrl collectors may call the
         # policy with single unbatched observations, so prepend a batch-safe flattening layer
-        # and disable the model's own reshape.
+        # and disable the model's own reshape. Convolutional networks instead consume the
+        # channel-first image observations directly (cast to float32).
         model_config = dict(self.config["model"])
-        model_config["reshape"] = False
-        obs_shape = self.env.observation_space.shape
-        self.value_net = torch.nn.Sequential(_Flatten(len(obs_shape)), model_factory(model_config))
+        if model_config["type"] == "ConvolutionalNetwork":
+            self.value_net = torch.nn.Sequential(_CastFloat(), model_factory(model_config))
+        else:
+            model_config["reshape"] = False
+            obs_shape = self.env.observation_space.shape
+            self.value_net = torch.nn.Sequential(_Flatten(len(obs_shape)), model_factory(model_config))
         self.value_module = TensorDictModule(self.value_net,
                                              in_keys=["observation"],
                                              out_keys=["action_value"])
@@ -185,8 +210,11 @@ class TorchRLDQNAgent(AbstractAgent):
         env_id = self.env.unwrapped.spec.id
         import_module = getattr(self.env, "import_module", None)
         env_config = dict(getattr(self.env.unwrapped, "config", None) or {})
+        make_kwargs = dict(getattr(self.env, "make_kwargs", None) or {})
+        wrapper_configs = getattr(self.env, "wrappers_config", None)
         device = str(self.device) if not self.device.type.startswith("cuda") else self.device
-        env_factory = lambda: _create_torchrl_env(env_id, device, import_module, env_config)
+        env_factory = lambda: _create_torchrl_env(env_id, device, import_module, env_config,
+                                                  make_kwargs, wrapper_configs)
         if backend == "batched":
             num_envs = int(self.config["num_envs"])
             if num_envs > 1:
@@ -265,6 +293,7 @@ class TorchRLDQNAgent(AbstractAgent):
 
         # Number of completed episodes, counted across the vectorized rollouts
         total_episodes = 0
+        train_start = time.time()
 
         td = rollout_env.reset()
         for batch in range(num_batches):
@@ -272,9 +301,11 @@ class TorchRLDQNAgent(AbstractAgent):
             rollout = []
             for _ in range(steps_per_batch):
                 td = self.policy(td)
-                td = rollout_env.step(td)
-                rollout.append(td)
-                total_episodes += int(td.get("done").sum())
+                # step_and_maybe_reset returns the transition (with the real reward and done
+                # flags under "next") and an auto-reset tensordict carrying into the next step.
+                step_td, td = rollout_env.step_and_maybe_reset(td)
+                rollout.append(step_td)
+                total_episodes += int(step_td.get(("next", "done")).sum())
             batch_td = torch.stack(rollout, dim=0).reshape(-1)
             self.buffer.extend(batch_td)
 
@@ -308,7 +339,8 @@ class TorchRLDQNAgent(AbstractAgent):
             log_training_progress(logger, self.__class__.__name__, evaluation.global_step, total_episodes,
                                   loss=sum(losses) / len(losses) if losses else None,
                                   epsilon=self._epsilon(self.global_step),
-                                  steps_per_second=frames_per_batch / max(duration, 1e-6))
+                                  steps_per_second=frames_per_batch / max(duration, 1e-6),
+                                  time=time.time() - train_start)
 
     def close(self):
         pass

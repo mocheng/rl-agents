@@ -86,6 +86,7 @@ class Evaluation(object):
         self.display_env = self.render_mode != "headless"
         self.render_fps = render_fps
         self.last_step_time = None
+        self.start_time = time.time()  # Wall-clock start of the run, for training time statistics
         self.step_callback_fn = step_callback_fn
 
         self.directory = Path(directory or self.default_directory)
@@ -371,7 +372,8 @@ class Evaluation(object):
         epsilon = getattr(exploration, "epsilon", None)
         log_training_progress(logger, self.agent.__class__.__name__, self.global_step, episode + 1,
                               epsilon=epsilon,
-                              steps_per_second=len(rewards) / duration if duration else None)
+                              steps_per_second=len(rewards) / duration if duration else None,
+                              time=time.time() - self.start_time)
         logger.info("Episode {} score: {:.1f}".format(episode, sum(rewards)))
 
     def after_some_episodes(self, episode, rewards,

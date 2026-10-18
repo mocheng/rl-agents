@@ -97,3 +97,27 @@ def test_batched_rollout_collects_frames():
     assert td.batch_size == torch.Size([4])
     agent.buffer.extend(td)
     assert len(agent.buffer) == 4
+
+
+def test_carracing_wrapped_env():
+    pytest.importorskip("Box2D")
+    from rl_agents.agents.common.wrappers import PreprocessImage
+    env = gym.make("CarRacing-v3", continuous=False)
+    env = PreprocessImage(env, size=32, grayscale=True, frame_stack=4)
+    env.make_kwargs = {"continuous": False}
+    env.wrappers_config = [{"type": "PreprocessImage",
+                            "kwargs": {"size": 32, "grayscale": True, "frame_stack": 4}}]
+    config = dict(CONFIG)
+    config["model"] = {"type": "ConvolutionalNetwork"}
+    config["collector_backend"] = "batched"
+    config["num_envs"] = 2
+    agent = TorchRLDQNAgent(env, config)
+    agent.seed(0)
+    agent.reset()
+    rollout_env = agent._make_rollout_env()
+    td = rollout_env.reset()
+    assert td["observation"].shape == (2, 4, 32, 32)
+    td = agent.policy(td)
+    td = rollout_env.step(td)
+    assert td["next", "reward"].shape[0] == 2
+    assert int(td["action"].max()) < env.action_space.n

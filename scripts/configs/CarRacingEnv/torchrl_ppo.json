@@ -1,0 +1,23 @@
+{
+    "__class__": "<class 'rl_agents.agents.torchrl.ppo.TorchRLPPOAgent'>",
+    "model": {
+        "type": "ConvolutionalNetwork"
+    },
+    "gamma": 0.99,
+    "lmbda": 0.95,
+    "clip_epsilon": 0.2,
+    "entropy_coeff": 0.01,
+    "loss_critic_type": "smooth_l1",
+    "optimizer": {
+        "lr": 3e-4
+    },
+    "update_epochs": 4,
+    "minibatch_size": 64,
+    "grad_norm_clipping": 0.5,
+    "num_envs": 2,
+    "frames_per_batch": 1024,
+    "collector_backend": "batched",
+    "total_steps": 500000,
+    "checkpoint_frequency": 10,
+    "device": "auto"
+}

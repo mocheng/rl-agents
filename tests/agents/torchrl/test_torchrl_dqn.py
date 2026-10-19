@@ -79,6 +79,37 @@ def test_save_load_roundtrip(tmp_path):
     assert agent.act(obs) == agent2.act(obs)
 
 
+def test_rotating_checkpoints(tmp_path):
+    config = dict(CONFIG)
+    config["checkpoint_frequency"] = 1
+    config["keep_checkpoints"] = 2
+    config["total_steps"] = 384  # 3 batches of 128 frames
+    env = make_env()
+    agent = TorchRLDQNAgent(env, config)
+    evaluation = TorchRLEvaluation(env, agent,
+                                   directory=tmp_path / "out",
+                                   num_episodes=1,
+                                   sim_seed=0,
+                                   render_mode="headless",
+                                   display_agent=False,
+                                   display_rewards=False,
+                                   close_env=False)
+    evaluation.train()
+    checkpoints = sorted(evaluation.run_directory.glob("checkpoint-[0-9]*.tar"))
+    assert len(checkpoints) == 2  # only the two most recent remain
+    assert (tmp_path / "out" / "saved_models" / "latest.tar").exists()
+
+
+def test_nature_cnn_capacity():
+    from rl_agents.agents.torchrl.networks import NatureCNN
+    import torch
+    net = NatureCNN(in_channels=4, out_features=5)
+    n = sum(p.numel() for p in net.parameters())
+    assert n > 1_000_000  # SB3-CnnPolicy-scale capacity
+    out = net(torch.zeros(2, 4, 84, 84))
+    assert out.shape == (2, 5)
+
+
 def test_batched_rollout_collects_frames():
     import torch
     config = dict(CONFIG)

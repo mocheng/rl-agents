@@ -64,7 +64,7 @@ class ProgressCallback(BaseCallback):
                                        loss=logger_values.get("train/loss"),
                                        epsilon=logger_values.get("train/exploration_rate"),
                                        steps_per_second=self.num_timesteps / max(elapsed, 1e-6),
-                                       time=elapsed))
+                                       time=elapsed), flush=True)
         return True
 
 
@@ -97,7 +97,7 @@ def main():
         callbacks.append(CheckpointCallback(save_freq=checkpoint_freq, save_path=str(output_dir),
                                             name_prefix=name, save_replay_buffer=False,
                                             save_vecnormalize=False))
-    callbacks.append(ProgressCallback(agent_config["algo"], frequency=max(steps // 20, 1)))
+    callbacks.append(ProgressCallback(agent_config["algo"], frequency=max(steps // 100, 1)))
     print("Training Stable-Baselines3 {} for {} steps on {} (seed {})".format(
         agent_config["algo"], steps, env_config_path, seed))
     model.learn(total_timesteps=steps, progress_bar=False, callback=callbacks)

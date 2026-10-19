@@ -109,6 +109,11 @@ Findings:
 
 ## Limitations / notes
 
+- **Action encoding (fixed)**: torchrl's `GymWrapper` defaults to one-hot action encoding, which
+  silently decoded the policy's scalar actions to 0 on CarRacing — the root cause of every
+  stalled training run. The factory now uses `categorical_action_encoding=True` plus a NumPy-2
+  compatibility shim for `read_action`. See
+  `lession_and_learn/TORCHRL_CARRACING_FINDINGS.md` for the full investigation.
 - torchrl 0.14 API differs from older tutorials (`SyncDataCollector` → `Collector`, `DQNLoss`
   requires `make_value_estimator(ValueEstimators.TD0, gamma=...)`, `QValueModule(action_space=...)`
   takes the string `"categorical"` plus `spec=`).

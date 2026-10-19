@@ -9,10 +9,11 @@ import gymnasium as gym
 import torch
 from gymnasium import spaces
 from tensordict.nn import TensorDictModule, TensorDictSequential
-from torchrl.data import Categorical, PrioritizedReplayBuffer, TensorDictReplayBuffer
+from torchrl.data import Categorical, OneHot, PrioritizedReplayBuffer, TensorDictReplayBuffer
 from torchrl.data.replay_buffers.storages import LazyMemmapStorage
 from torchrl.envs import SerialEnv
 from torchrl.envs.libs.gym import GymWrapper
+from torchrl.envs.gym_like import GymLikeEnv
 from torchrl.modules import EGreedyModule, QValueModule
 from torchrl.objectives import DQNLoss, ValueEstimators
 from torchrl.objectives.utils import HardUpdate
@@ -20,9 +21,32 @@ from torchrl.objectives.utils import HardUpdate
 from rl_agents.agents.common import wrappers as repo_wrappers
 from rl_agents.agents.common.abstract import AbstractAgent
 from rl_agents.agents.common.models import model_factory, size_model_config
+from rl_agents.agents.torchrl.networks import NatureCNN
+from rl_agents.agents.torchrl.trainer import save_rotating_checkpoint
 from rl_agents.trainer.statistics import log_training_progress
 
 logger = logging.getLogger(__name__)
+
+
+def _read_action_numpy2_compat(self, action):
+    """
+        NumPy 2 compatibility shim for torchrl's GymWrapper.read_action: the original
+        converts unbatched actions to size-1 numpy arrays and then calls int(array), which
+        raises on NumPy 2. Reshape to a 0-dim array first.
+    """
+    action = GymLikeEnv.read_action(self, action)
+    if (
+        isinstance(self.action_spec, (OneHot, Categorical))
+        and action.size == 1
+        and not self._is_batched
+    ):
+        if isinstance(action, np.ndarray) and action.ndim == 1:
+            action = action.reshape(())
+        action = int(action)
+    return action
+
+
+GymWrapper.read_action = _read_action_numpy2_compat
 
 
 def _create_torchrl_env(env_id, device, import_module=None, env_config=None, make_kwargs=None,
@@ -48,7 +72,9 @@ def _create_torchrl_env(env_id, device, import_module=None, env_config=None, mak
             wrapper_class = getattr(repo_wrappers, wrapper_config["type"])
         env = wrapper_class(env, **wrapper_config.get("kwargs", {}))
     env.reset()  # apply the configuration and initialize wrapper state (e.g. frame stacking)
-    return GymWrapper(env, device=device)
+    # categorical_action_encoding=True: actions are scalar indices, not one-hot vectors.
+    # Without it, torchrl decodes scalar actions to 0 and the agent can never act!
+    return GymWrapper(env, device=device, categorical_action_encoding=True)
 
 
 class _Flatten(torch.nn.Module):
@@ -120,6 +146,8 @@ class TorchRLDQNAgent(AbstractAgent):
                     batch_size=32,
                     memory_capacity=15000,
                     target_update=50,
+                    learning_starts=0,
+                    gradient_clipping="none",  # "elementwise" (MSEDQN), a max-norm value, or none
                     prioritized=False,
                     priority_alpha=0.6,
                     priority_beta=0.4,
@@ -129,6 +157,8 @@ class TorchRLDQNAgent(AbstractAgent):
                     collector_backend="batched",
                     total_steps=100000,
                     checkpoint_frequency=20,
+                    keep_checkpoints=3,
+                    diagnostics_frequency=0,
                     exploration=dict(method="EpsilonGreedy",
                                      tau=6000,
                                      temperature=1.0,
@@ -157,7 +187,10 @@ class TorchRLDQNAgent(AbstractAgent):
         # and disable the model's own reshape. Convolutional networks instead consume the
         # channel-first image observations directly (cast to float32).
         model_config = dict(self.config["model"])
-        if model_config["type"] == "ConvolutionalNetwork":
+        if model_config["type"] == "NatureCNN":
+            self.value_net = NatureCNN(in_channels=self.env.observation_space.shape[0],
+                                       out_features=self.env.action_space.n)
+        elif model_config["type"] == "ConvolutionalNetwork":
             self.value_net = torch.nn.Sequential(_CastFloat(), model_factory(model_config))
         else:
             model_config["reshape"] = False
@@ -224,6 +257,22 @@ class TorchRLDQNAgent(AbstractAgent):
             raise ValueError("Unknown collector_backend '{}'. Choose from: batched, direct".format(backend))
         return env_factory()
 
+    def _clip_gradients(self):
+        """
+            Gradient clipping, mirroring the repository's DQN variants: "elementwise" clamps
+            each gradient to [-1, 1] (the MSEDQN recipe), a numeric value clips the global
+            gradient norm, and "none" disables clipping.
+        """
+        clipping = self.config["gradient_clipping"]
+        if clipping in (None, "none", 0, "0"):
+            return
+        if clipping == "elementwise":
+            for param in self.loss_module.parameters():
+                if param.grad is not None:
+                    param.grad.data.clamp_(-1, 1)
+            return
+        torch.nn.utils.clip_grad_norm_(self.loss_module.parameters(), float(clipping))
+
     def _updates_per_batch(self):
         updates = self.config["updates_per_batch"]
         if updates == "auto":
@@ -274,6 +323,28 @@ class TorchRLDQNAgent(AbstractAgent):
         # Training is handled by the agent's own batch-collection loop.
         pass
 
+    def _log_diagnostics(self, batch):
+        """
+            Log Q-value and TD-target statistics of a sampled batch, to watch the value
+            function dynamics during training.
+        """
+        if not self.config["diagnostics_frequency"] or \
+                batch % int(self.config["diagnostics_frequency"]) != 0:
+            return
+        if len(self.buffer) < int(self.config["batch_size"]):
+            return
+        sample = self.buffer.sample(int(self.config["batch_size"]))
+        with torch.no_grad():
+            q = self.value_net(sample["observation"])                     # (B, A)
+            q_next = self.value_net(sample["next"]["observation"])        # (B, A)
+            rewards = sample["next"]["reward"].reshape(-1)
+            done = sample["next"]["done"].reshape(-1).float()
+            target = rewards + float(self.config["gamma"]) * q_next.max(-1).values * (1 - done)
+            logger.info("[diag] q_mean={:.3f} q_spread={:.3f} target_mean={:.3f} "
+                        "reward_mean={:.3f} done_frac={:.3f}".format(
+                            float(q.mean()), float((q.max(-1).values - q.min(-1).values).mean()),
+                            float(target.mean()), float(rewards.mean()), float(done.mean())))
+
     def train_loop(self, evaluation):
         """
             Train the agent: collect batched rollouts with an explicit in-process loop, update
@@ -313,10 +384,13 @@ class TorchRLDQNAgent(AbstractAgent):
             for _ in range(self._updates_per_batch()):
                 if len(self.buffer) < int(self.config["batch_size"]):
                     break
+                if len(self.buffer) < int(self.config["learning_starts"]):
+                    break  # replay warmup: collect transitions before the first update
                 sample = self.buffer.sample(int(self.config["batch_size"]))
                 result = self.loss_module(sample)
                 loss = result.get("loss")
                 loss.backward()
+                self._clip_gradients()
                 self.optimizer.step()
                 self.optimizer.zero_grad()
                 self.updater.step()
@@ -335,12 +409,13 @@ class TorchRLDQNAgent(AbstractAgent):
                                        self.global_step)
                 self.writer.add_scalar("agent/buffer_size", len(self.buffer), self.global_step)
             if checkpoint_frequency and batch % checkpoint_frequency == 0:
-                evaluation.save_agent_model(batch)
+                save_rotating_checkpoint(evaluation, batch, keep=int(self.config["keep_checkpoints"]))
             log_training_progress(logger, self.__class__.__name__, evaluation.global_step, total_episodes,
                                   loss=sum(losses) / len(losses) if losses else None,
                                   epsilon=self._epsilon(self.global_step),
                                   steps_per_second=frames_per_batch / max(duration, 1e-6),
                                   time=time.time() - train_start)
+            self._log_diagnostics(batch)
 
     def close(self):
         pass

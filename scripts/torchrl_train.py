@@ -9,10 +9,13 @@ Options:
   --steps <count>    Total number of environment steps [default: 100000].
   --seed <seed>      Random seed [default: 0].
   --output <dir>     Output directory [default: out/TorchRL].
+  --recover-from <file>  Resume from a torch checkpoint: trains the remaining steps.
 """
 import json
+import re
 from pathlib import Path
 
+import torch
 from docopt import docopt
 
 from rl_agents.agents.common.factory import load_agent, load_environment
@@ -35,6 +38,22 @@ def main():
     agent = load_agent(agent_config_path, env)
     agent.update_config({"total_steps": steps})
 
+    recover_from = opts["--recover-from"]
+    if recover_from:
+        checkpoint = torch.load(recover_from, map_location="cpu")
+        trained_steps = int(checkpoint.get("global_step", 0))
+        if trained_steps == 0:
+            # Old checkpoints did not store the step count: infer it from the batch index
+            # in the file name (checkpoint-<batch>.tar * frames_per_batch).
+            match = re.search(r"checkpoint-(\d+)\.tar", recover_from)
+            if match:
+                trained_steps = int(match.group(1)) * int(agent.config.get("frames_per_batch", 0))
+        remaining = max(steps - trained_steps, 0)
+        agent.global_step = trained_steps
+        agent.update_config({"total_steps": remaining, "learning_starts": 0})
+        print("Resuming from {} ({} steps trained, {} remaining)".format(
+            recover_from, trained_steps, remaining))
+
     output_dir = Path(opts["--output"]) / Path(env_config_path).stem
     output_dir.mkdir(parents=True, exist_ok=True)
     evaluation = TorchRLEvaluation(env,
@@ -42,6 +61,7 @@ def main():
                                    directory=output_dir,
                                    num_episodes=1,
                                    sim_seed=seed,
+                                   recover=recover_from,
                                    render_mode="headless",
                                    display_agent=False,
                                    display_rewards=False,

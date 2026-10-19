@@ -115,6 +115,9 @@ class TorchRLPPOAgent(TorchRLDQNAgent):
             self.reset()
         self.training = True
         rollout_env = self._make_rollout_env()
+        # Resume support: continue from a loaded checkpoint's step count.
+        evaluation.global_step = max(evaluation.global_step, self.global_step)
+        self.set_global_step(evaluation.global_step)
         num_envs = int(self.config["num_envs"]) if self.config["collector_backend"] == "batched" else 1
         steps_per_batch = max(2, int(self.config["frames_per_batch"]) // num_envs)
         # The last transition of each rollout has no bootstrap value and is discarded
@@ -126,18 +129,31 @@ class TorchRLPPOAgent(TorchRLDQNAgent):
         checkpoint_frequency = int(self.config["checkpoint_frequency"])
 
         total_episodes = 0
+        episode_rewards = torch.zeros(num_envs)
+        episode_lengths = torch.zeros(num_envs, dtype=torch.long)
         train_start = time.time()
         td = rollout_env.reset()
         for batch in range(num_batches):
             start = time.time()
             rollout = []
+            completed_returns = []
+            completed_lengths = []
             with torch.no_grad():
                 for _ in range(steps_per_batch):
                     td = self.actor(td)
                     td = self.critic(td)
                     step_td, td = rollout_env.step_and_maybe_reset(td)
                     rollout.append(step_td)
-                    total_episodes += int(step_td.get(("next", "done")).sum())
+                    rewards = step_td.get(("next", "reward")).reshape(num_envs)
+                    done = step_td.get(("next", "done")).reshape(num_envs).bool()
+                    episode_rewards += rewards
+                    episode_lengths += 1
+                    if done.any():
+                        completed_returns += episode_rewards[done].tolist()
+                        completed_lengths += episode_lengths[done].tolist()
+                        episode_rewards[done] = 0.0
+                        episode_lengths[done] = 0
+                        total_episodes += int(done.sum())
                 for i in range(len(rollout) - 1):
                     rollout[i].set(("next", "state_value"), rollout[i + 1].get("state_value"))
             data = torch.stack(rollout[:-1]).reshape(-1)
@@ -160,6 +176,14 @@ class TorchRLPPOAgent(TorchRLDQNAgent):
                 self.writer.add_scalar("agent/loss", sum(losses) / len(losses), self.global_step)
                 self.writer.add_scalar("agent/env_steps_per_second",
                                        data.numel() / max(duration, 1e-6), self.global_step)
+                if completed_returns:
+                    self.writer.add_scalar("episode/completed", len(completed_returns), self.global_step)
+                    self.writer.add_scalar("episode/mean_return",
+                                           sum(completed_returns) / len(completed_returns), self.global_step)
+                    self.writer.add_scalar("episode/mean_length",
+                                           sum(completed_lengths) / len(completed_lengths), self.global_step)
+                    for score in completed_returns:
+                        self.writer.add_scalar("episode/score", score, self.global_step)
             if checkpoint_frequency and batch % checkpoint_frequency == 0:
                 save_rotating_checkpoint(evaluation, batch, keep=int(self.config["keep_checkpoints"]))
             log_training_progress(logger, self.__class__.__name__, evaluation.global_step, total_episodes,
@@ -175,7 +199,8 @@ class TorchRLPPOAgent(TorchRLDQNAgent):
             self.reset()
         torch.save({"actor": self.actor_net.state_dict(),
                     "critic": self.critic_net.state_dict(),
-                    "optimizer": self.optimizer.state_dict()}, filename)
+                    "optimizer": self.optimizer.state_dict(),
+                    "global_step": self.global_step}, filename)
         return filename
 
     def load(self, filename):
@@ -191,4 +216,6 @@ class TorchRLPPOAgent(TorchRLDQNAgent):
         self.actor_net.load_state_dict(checkpoint["actor"])
         self.critic_net.load_state_dict(checkpoint["critic"])
         self.optimizer.load_state_dict(checkpoint["optimizer"])
+        # Resume support: keep the largest known step count (the checkpoint may predate it).
+        self.global_step = max(self.global_step, int(checkpoint.get("global_step", 0)))
         return filename

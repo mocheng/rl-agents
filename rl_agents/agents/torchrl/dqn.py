@@ -355,6 +355,12 @@ class TorchRLDQNAgent(AbstractAgent):
             self.reset()
         self.training = True
         rollout_env = self._make_rollout_env()
+        # Resume support: continue from a loaded checkpoint's step count, and sync the
+        # exploration module's epsilon with the resumed schedule.
+        evaluation.global_step = max(evaluation.global_step, self.global_step)
+        self.set_global_step(evaluation.global_step)
+        if self.egreedy is not None:
+            self.egreedy.eps.data.copy_(torch.tensor(self._epsilon(self.global_step)))
         num_envs = int(self.config["num_envs"]) if self.config["collector_backend"] == "batched" else 1
         frames_per_batch = int(self.config["frames_per_batch"])
         steps_per_batch = max(1, frames_per_batch // num_envs)
@@ -362,21 +368,34 @@ class TorchRLDQNAgent(AbstractAgent):
         num_batches = int(self.config["total_steps"]) // frames_per_batch
         checkpoint_frequency = int(self.config["checkpoint_frequency"])
 
-        # Number of completed episodes, counted across the vectorized rollouts
+        # Episode statistics, accumulated across the vectorized rollouts
         total_episodes = 0
+        episode_rewards = torch.zeros(num_envs)
+        episode_lengths = torch.zeros(num_envs, dtype=torch.long)
         train_start = time.time()
 
         td = rollout_env.reset()
         for batch in range(num_batches):
             start = time.time()
             rollout = []
+            completed_returns = []
+            completed_lengths = []
             for _ in range(steps_per_batch):
                 td = self.policy(td)
                 # step_and_maybe_reset returns the transition (with the real reward and done
                 # flags under "next") and an auto-reset tensordict carrying into the next step.
                 step_td, td = rollout_env.step_and_maybe_reset(td)
                 rollout.append(step_td)
-                total_episodes += int(step_td.get(("next", "done")).sum())
+                rewards = step_td.get(("next", "reward")).reshape(num_envs)
+                done = step_td.get(("next", "done")).reshape(num_envs).bool()
+                episode_rewards += rewards
+                episode_lengths += 1
+                if done.any():
+                    completed_returns += episode_rewards[done].tolist()
+                    completed_lengths += episode_lengths[done].tolist()
+                    episode_rewards[done] = 0.0
+                    episode_lengths[done] = 0
+                    total_episodes += int(done.sum())
             batch_td = torch.stack(rollout, dim=0).reshape(-1)
             self.buffer.extend(batch_td)
 
@@ -402,12 +421,21 @@ class TorchRLDQNAgent(AbstractAgent):
             duration = time.time() - start
             evaluation.global_step += frames_per_batch
             self.set_global_step(evaluation.global_step)
-            if self.writer is not None and losses:
-                self.writer.add_scalar("agent/loss", sum(losses) / len(losses), self.global_step)
+            if self.writer is not None:
+                if losses:
+                    self.writer.add_scalar("agent/loss", sum(losses) / len(losses), self.global_step)
                 self.writer.add_scalar("agent/epsilon", self._epsilon(self.global_step), self.global_step)
                 self.writer.add_scalar("agent/env_steps_per_second", frames_per_batch / max(duration, 1e-6),
                                        self.global_step)
                 self.writer.add_scalar("agent/buffer_size", len(self.buffer), self.global_step)
+                if completed_returns:
+                    self.writer.add_scalar("episode/completed", len(completed_returns), self.global_step)
+                    self.writer.add_scalar("episode/mean_return",
+                                           sum(completed_returns) / len(completed_returns), self.global_step)
+                    self.writer.add_scalar("episode/mean_length",
+                                           sum(completed_lengths) / len(completed_lengths), self.global_step)
+                    for score in completed_returns:
+                        self.writer.add_scalar("episode/score", score, self.global_step)
             if checkpoint_frequency and batch % checkpoint_frequency == 0:
                 save_rotating_checkpoint(evaluation, batch, keep=int(self.config["keep_checkpoints"]))
             log_training_progress(logger, self.__class__.__name__, evaluation.global_step, total_episodes,
@@ -427,7 +455,8 @@ class TorchRLDQNAgent(AbstractAgent):
         if not self._initialized:
             self.reset()
         torch.save({"value_net": self.value_net.state_dict(),
-                    "optimizer": self.optimizer.state_dict()}, filename)
+                    "optimizer": self.optimizer.state_dict(),
+                    "global_step": self.global_step}, filename)
         return filename
 
     def load(self, filename):
@@ -442,6 +471,8 @@ class TorchRLDQNAgent(AbstractAgent):
         checkpoint = torch.load(filename, map_location=self.device)
         self.value_net.load_state_dict(checkpoint["value_net"])
         self.optimizer.load_state_dict(checkpoint["optimizer"])
+        # Resume support: keep the largest known step count (the checkpoint may predate it).
+        self.global_step = max(self.global_step, int(checkpoint.get("global_step", 0)))
         # Refresh the target network parameters with the loaded weights
         self.updater.step()
         return filename
